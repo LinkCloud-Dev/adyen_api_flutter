@@ -73,9 +73,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
                 result
         )
       }
-      "createTerminalAPIPaymentRequest" -> {
-        createTerminalAPIPaymentRequest()
-      }
       else -> {
         result.notImplemented()
       }

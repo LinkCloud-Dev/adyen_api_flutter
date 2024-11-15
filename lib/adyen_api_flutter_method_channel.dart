@@ -14,4 +14,14 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
     final version = await methodChannel.invokeMethod<String>('getPlatformVersion');
     return version;
   }
+
+  @override
+  Future<void> init() async {
+    await methodChannel.invokeMethod('init');
+  }
+
+  @override
+  Future<void> request() async {
+    await methodChannel.invokeMethod('request');
+  }
 }

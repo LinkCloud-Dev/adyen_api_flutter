@@ -26,4 +26,12 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
   Future<String?> getPlatformVersion() {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
+
+  Future<void> init() {
+    return _instance.init();
+  }
+
+  Future<void> request() {
+    return _instance.request();
+  }
 }

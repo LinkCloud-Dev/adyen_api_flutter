@@ -19,6 +19,22 @@ class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
   final _adyenApiFlutterPlugin = AdyenApiFlutter();
 
+  // Your unique ID for the POS system component to send this request from.
+  String saleID = "001"; //"YOUR_CASH_REGISTER_ID"
+  // 	The unique ID of the terminal to send this request to. Format: [device model]-[serial number].
+  String POIID = "S1F2-000158234612430"; //"YOUR_TERMINAL_ID"
+  String amount = "1.99";
+
+  // SecurityKey configs
+  int keyVersion = 1;
+  String keyIdentifier = "keyIdentifier";
+  String passphrase = "passphrase";
+
+  String ipAddress = "192.168.0.118";
+
+  String environment = "test";
+
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +63,16 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  Future<void> _init() async {
+    var result = await _adyenApiFlutterPlugin.init();
+  }
+
+  Future<void> _paymentRequest() async {
+    var result = await _adyenApiFlutterPlugin.request();
+  }
+
+  // TODO: UI for terminal ip address, encryption key (identifier, passphrase and version)
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -55,7 +81,15 @@ class _MyAppState extends State<MyApp> {
           title: const Text('Plugin example app'),
         ),
         body: Center(
-          child: Text('Running on: $_platformVersion\n'),
+          child: Column(
+            children: [
+              Text('Running on: $_platformVersion\n'),
+              ElevatedButton(
+                  onPressed: () => _init(), child: const Text("Init")),
+              ElevatedButton(
+                  onPressed: () => _paymentRequest(), child: const Text("Payment Request")),
+            ],
+          ),
         ),
       ),
     );

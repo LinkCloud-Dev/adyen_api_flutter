@@ -28,11 +28,11 @@ class _MyAppState extends State<MyApp> {
   // SecurityKey configs
   int keyVersion = 1;
   String keyIdentifier = "keyIdentifier";
-  String passphrase = "passphrase";
+  String keyPassphrase = "passphrase";
 
   String ipAddress = "192.168.0.118";
 
-  String environment = "test";
+  bool testEnvironment = true;
 
 
   @override
@@ -64,7 +64,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _init() async {
-    var result = await _adyenApiFlutterPlugin.init();
+    var result = await _adyenApiFlutterPlugin.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
   Future<void> _paymentRequest() async {

@@ -65,7 +65,13 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         result.success("Android ${android.os.Build.VERSION.RELEASE}")
       }
       "init" -> {
-        init(result)
+        init(
+          call.argument("ipAddress")!!,
+          call.argument("keyVersion")!!,
+          call.argument("keyIdentifier")!!,
+          call.argument("keyPassphrase")!!,
+          call.argument("testEnvironment")!!,
+          result)
       }
       "request" -> {
         request(
@@ -83,7 +89,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     channel.setMethodCallHandler(null)
   }
 
-  fun init(result: MethodChannel.Result) {
+  fun init(ipAddress: String, keyVersion: Int, keyIdentifier: String, keyPassphrase: String, testEnvironment: Boolean = false, result: Result) {
     var initialized = true
     Log.d(tag, "---> init()")
 
@@ -94,18 +100,19 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     if (initialized) {
-      result.error("INITIALIZED", "Initialized Already.", null)
+//      result.error("INITIALIZED", "Initialized Already.", null)
+      result.success(null)
       return
     }
 
     try {
-      val environment = Environment.TEST // or Environment.LIVE
+      val environment = if (testEnvironment) Environment.TEST else Environment.LIVE
       val config = Config()
 
       // URL of the terminal,
       // for example https://192.168.68.117, WITHOUT the port/nexo part :8443/nexo/
       // TODO: variable address
-      config.setTerminalApiLocalEndpoint("https://192.168.0.118")
+      config.setTerminalApiLocalEndpoint("https://" + ipAddress)
       config.setEnvironment(environment)
       config.setHostnameVerifier(TerminalLocalAPIHostnameVerifier(environment))
       // init SSLContext
@@ -118,10 +125,10 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
       // config SecurityKey
       securityKey = SecurityKey()
-      securityKey.setKeyVersion(1)
+      securityKey.setKeyVersion(keyVersion)
       securityKey.setAdyenCryptoVersion(1)
-      securityKey.setKeyIdentifier("keyIdentifier")
-      securityKey.setPassphrase("passphrase")
+      securityKey.setKeyIdentifier(keyIdentifier)
+      securityKey.setPassphrase(keyPassphrase)
 
       terminalLocalAPI = TerminalLocalAPI(client, securityKey)
       Log.d(tag, "---> exit init()")
@@ -162,7 +169,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return sslContext
   }
 
-  private fun request(result: MethodChannel.Result) {
+  private fun request(result: Result) {
     Log.d(tag, "---> request()")
     val terminalAPIPaymentRequest: TerminalAPIRequest? = createTerminalAPIPaymentRequest()
     // create worker thread

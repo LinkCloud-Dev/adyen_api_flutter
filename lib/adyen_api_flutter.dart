@@ -6,8 +6,8 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.getPlatformVersion();
   }
 
-  Future<void> init() {
-    return AdyenApiFlutterPlatform.instance.init();
+  Future<void> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) {
+    return AdyenApiFlutterPlatform.instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
   Future<void> request() {

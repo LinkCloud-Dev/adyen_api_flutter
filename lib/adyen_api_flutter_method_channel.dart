@@ -16,8 +16,16 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<void> init() async {
-    await methodChannel.invokeMethod('init');
+  Future<void> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) async {
+    await methodChannel.invokeMethod('init',
+        {
+          'ipAddress': ipAddress,
+          'keyVersion': keyVersion,
+          'keyIdentifier': keyIdentifier,
+          'keyPassphrase': keyPassphrase,
+          'testEnvironment': testEnvironment,
+        }
+    );
   }
 
   @override

@@ -73,8 +73,8 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           call.argument<Boolean>("testEnvironment")!!,
           result)
       }
-      "request" -> {
-        request(
+      "paymentRequest" -> {
+        paymentRequest(
           call.argument<Double>("amount")!!,
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
@@ -171,8 +171,8 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return sslContext
   }
 
-  private fun request(amount: Double, POIID: String, saleID: String, result: Result) {
-    Log.d(tag, "---> request()")
+  private fun paymentRequest(amount: Double, POIID: String, saleID: String, result: Result) {
+    Log.d(tag, "---> paymentRequest()")
     val terminalAPIPaymentRequest: TerminalAPIRequest? = createTerminalAPIPaymentRequest(amount, POIID, saleID)
     // create worker thread
     val executor = Executors.newSingleThreadExecutor()
@@ -201,7 +201,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       result.error("INTERRUPTED_EXECUTION", "Task was interrupted", null)
     }
 
-    Log.d(tag, "---> exit request()")
+    Log.d(tag, "---> exit paymentRequest()")
   }
 
   private fun createTerminalAPIPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {

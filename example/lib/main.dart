@@ -71,9 +71,9 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _paymentRequest() async {
     // use without saleID (default to "001")
-    var result = await _adyenApiFlutterPlugin.request(toDoubleAmountTrimmed(amount), POIID);
+    var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID);
     // use with saleID
-    // var result = await _adyenApiFlutterPlugin.request(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);
+    // var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);
   }
 
   double toDoubleAmountTrimmed(String amount) {

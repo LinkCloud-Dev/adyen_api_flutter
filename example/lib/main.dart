@@ -19,12 +19,7 @@ class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
   final _adyenApiFlutterPlugin = AdyenApiFlutter();
 
-  // Your unique ID for the POS system component to send this request from.
-  String saleID = "001"; //"YOUR_CASH_REGISTER_ID"
-  // 	The unique ID of the terminal to send this request to. Format: [device model]-[serial number].
-  String POIID = "S1F2-000158234612430"; //"YOUR_TERMINAL_ID"
-  String amount = "1.99";
-
+  // CLIENT SETUP
   // SecurityKey configs
   int keyVersion = 1;
   String keyIdentifier = "keyIdentifier";
@@ -33,6 +28,13 @@ class _MyAppState extends State<MyApp> {
   String ipAddress = "192.168.0.118";
 
   bool testEnvironment = true;
+
+  // REQUEST
+  // Your unique ID for the POS system component to send this request from.
+  String saleID = "002"; //"YOUR_CASH_REGISTER_ID"
+  // 	The unique ID of the terminal to send this request to. Format: [device model]-[serial number].
+  String POIID = "S1F2-000158234612430"; //"YOUR_TERMINAL_ID"
+  String amount = "4.98";
 
 
   @override
@@ -68,8 +70,24 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _paymentRequest() async {
-    var result = await _adyenApiFlutterPlugin.request();
+    // use without saleID (default to "001")
+    var result = await _adyenApiFlutterPlugin.request(toDoubleAmountTrimmed(amount), POIID);
+    // use with saleID
+    // var result = await _adyenApiFlutterPlugin.request(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);
   }
+
+  double toDoubleAmountTrimmed(String amount) {
+    try {
+      // Parse the string to a double
+      double parsedAmount = double.parse(amount);
+
+      // Trim the double to 2 decimal places
+      return double.parse(parsedAmount.toStringAsFixed(2));
+    } catch (e) {
+      throw FormatException("Invalid amount format: $amount");
+    }
+  }
+
 
   // TODO: UI for terminal ip address, encryption key (identifier, passphrase and version)
 

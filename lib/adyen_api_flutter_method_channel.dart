@@ -29,7 +29,13 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<void> request() async {
-    await methodChannel.invokeMethod('request');
+  Future<void> request(double amount, String POIID, String saleID) async {
+    await methodChannel.invokeMethod('request',
+        {
+          'amount': amount,
+          'POIID': POIID,
+          'saleID': saleID,
+        }
+    );
   }
 }

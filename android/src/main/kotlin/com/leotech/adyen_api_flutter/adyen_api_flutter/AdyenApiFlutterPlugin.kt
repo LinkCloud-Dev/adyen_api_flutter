@@ -66,17 +66,19 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       }
       "init" -> {
         init(
-          call.argument("ipAddress")!!,
-          call.argument("keyVersion")!!,
-          call.argument("keyIdentifier")!!,
-          call.argument("keyPassphrase")!!,
-          call.argument("testEnvironment")!!,
+          call.argument<String>("ipAddress")!!,
+          call.argument<Int>("keyVersion")!!,
+          call.argument<String>("keyIdentifier")!!,
+          call.argument<String>("keyPassphrase")!!,
+          call.argument<Boolean>("testEnvironment")!!,
           result)
       }
       "request" -> {
         request(
-//                call.argument("saleID")!!
-                result
+          call.argument<Double>("amount")!!,
+          call.argument<String>("POIID")!!,
+          call.argument<String>("saleID")!!,
+          result
         )
       }
       else -> {
@@ -169,9 +171,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return sslContext
   }
 
-  private fun request(result: Result) {
+  private fun request(amount: Double, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> request()")
-    val terminalAPIPaymentRequest: TerminalAPIRequest? = createTerminalAPIPaymentRequest()
+    val terminalAPIPaymentRequest: TerminalAPIRequest? = createTerminalAPIPaymentRequest(amount, POIID, saleID)
     // create worker thread
     val executor = Executors.newSingleThreadExecutor()
     // submit the task
@@ -202,11 +204,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit request()")
   }
 
-  private fun createTerminalAPIPaymentRequest(): TerminalAPIRequest? {
-    // Your unique ID for the POS system component to send this request from.
-    val saleID = "001" //"YOUR_CASH_REGISTER_ID"
-    // 	The unique ID of the terminal to send this request to. Format: [device model]-[serial number].
-    val POIID = "S1F2-000158234612430" //"YOUR_TERMINAL_ID"
+  private fun createTerminalAPIPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
     // Your unique ID for this request, consisting of 1-10 alphanumeric characters.
     // Must be unique within the last 48 hours for the terminal (POIID) being used.
     val serviceID = System.currentTimeMillis().toString().takeLast(10) //"YOUR_UNIQUE_ATTEMPT_ID"
@@ -240,7 +238,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     val paymentTransaction = PaymentTransaction()
     val amountsReq = AmountsReq()
     amountsReq.setCurrency("AUD")
-    amountsReq.setRequestedAmount(BigDecimal.valueOf(10.99))
+    amountsReq.setRequestedAmount(BigDecimal.valueOf(amount))
     paymentTransaction.setAmountsReq(amountsReq)
     paymentRequest.setPaymentTransaction(paymentTransaction)
     saleToPOIRequest.setPaymentRequest(paymentRequest)
@@ -251,7 +249,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return terminalAPIRequest
   }
 
-open fun printSaleToPOIResponseInfo(response: SaleToPOIResponse?) {
+  fun printSaleToPOIResponseInfo(response: SaleToPOIResponse?) {
   if (response == null) {
     println("SaleToPOIResponse is null.")
     return

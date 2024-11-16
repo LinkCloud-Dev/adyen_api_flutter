@@ -10,7 +10,7 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
-  Future<void> request() {
-    return AdyenApiFlutterPlatform.instance.request();
+  Future<void> request(double amount, String POIID, {String saleID = "001"}) {
+    return AdyenApiFlutterPlatform.instance.request(amount, POIID, saleID);
   }
 }

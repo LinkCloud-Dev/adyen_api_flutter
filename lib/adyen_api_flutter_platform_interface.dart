@@ -31,7 +31,7 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     return _instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
-  Future<void> request() {
-    return _instance.request();
+  Future<void> request(double amount, String POIID, String saleID) {
+    return _instance.request(amount, POIID, saleID);
   }
 }

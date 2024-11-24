@@ -13,4 +13,8 @@ class AdyenApiFlutter {
   Future<void> paymentRequest(double amount, String POIID, {String saleID = "001"}) {
     return AdyenApiFlutterPlatform.instance.paymentRequest(amount, POIID, saleID);
   }
+
+  Future<void> abortRequest(String POIID, {String saleID = "001"}) {
+    return AdyenApiFlutterPlatform.instance.abortRequest(POIID, saleID);
+  }
 }

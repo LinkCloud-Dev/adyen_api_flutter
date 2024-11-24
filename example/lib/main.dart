@@ -76,6 +76,13 @@ class _MyAppState extends State<MyApp> {
     // var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);
   }
 
+  Future<void> _abortRequest() async {
+    // use without saleID (default to "001")
+    var result = await _adyenApiFlutterPlugin.abortRequest(POIID);
+    // use with saleID
+    // var result = await _adyenApiFlutterPlugin.abortRequest(POIID, saleID: saleID);
+  }
+
   double toDoubleAmountTrimmed(String amount) {
     try {
       // Parse the string to a double
@@ -106,6 +113,8 @@ class _MyAppState extends State<MyApp> {
                   onPressed: () => _init(), child: const Text("Init")),
               ElevatedButton(
                   onPressed: () => _paymentRequest(), child: const Text("Payment Request")),
+              ElevatedButton(
+                  onPressed: () => _abortRequest(), child: const Text("Abort Request")),
             ],
           ),
         ),

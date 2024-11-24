@@ -38,4 +38,14 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
         }
     );
   }
+
+  @override
+  Future<void> abortRequest(String POIID, String saleID) async {
+    await methodChannel.invokeMethod('abortRequest',
+        {
+          'POIID': POIID,
+          'saleID': saleID,
+        }
+    );
+  }
 }

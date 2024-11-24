@@ -1,6 +1,8 @@
 package com.leotech.adyen_api_flutter.adyen_api_flutter
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.annotation.NonNull
 import com.adyen.Client
@@ -51,6 +53,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private lateinit var certificateInputStream: InputStream
   private lateinit var sslContext: SSLContext
   private lateinit var context: Context
+  private var currentServiceID: String? = null
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "adyen_api_flutter")
@@ -76,6 +79,13 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       "paymentRequest" -> {
         paymentRequest(
           call.argument<Double>("amount")!!,
+          call.argument<String>("POIID")!!,
+          call.argument<String>("saleID")!!,
+          result
+        )
+      }
+      "abortRequest" -> {
+        abortRequest(
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
           result
@@ -171,43 +181,67 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return sslContext
   }
 
+  private val requestExecutor = Executors.newSingleThreadExecutor()
+  private val abortExecutor = Executors.newSingleThreadExecutor()
+
+  // TODO: handle response messages and error types, return info to dart
   private fun paymentRequest(amount: Double, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> paymentRequest()")
-    val terminalAPIPaymentRequest: TerminalAPIRequest? = createTerminalAPIPaymentRequest(amount, POIID, saleID)
-    // create worker thread
-    val executor = Executors.newSingleThreadExecutor()
-    // submit the task
-    val future = executor.submit<TerminalAPIResponse> {
-      // this block of code will run asynchronously
-      val terminalAPIResponse: TerminalAPIResponse = terminalLocalAPI.request(terminalAPIPaymentRequest)
-      terminalAPIResponse  // return the response to the future
+    val request: TerminalAPIRequest? = createPaymentRequest(amount, POIID, saleID)
+    requestExecutor.submit {
+      try {
+        val response: TerminalAPIResponse = terminalLocalAPI.request(request)
+        Handler(Looper.getMainLooper()).post {
+          printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
+          result.success(null)
+        }
+      } catch (e: TimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("ERROR", e.message, null)
+        }
+      }
     }
-
-    // wait for the result (this will block until the task finishes)
-    try {
-      val response = future.get(60, TimeUnit.SECONDS)  // set a timeout of 60 seconds
-      // handle the response
-      println("Received response: $response")
-      printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
-      result.success(null)
-    } catch (e: TimeoutException) {
-      println("Request timed out")
-      result.error("TIMED_OUT", "Request timed out", null)
-    } catch (e: ExecutionException) {
-      println("Exception during execution: ${e.cause}")
-      result.error("EXECUTION_FAILED", "Exception during execution: ${e.cause}", null)
-    } catch (e: InterruptedException) {
-      println("Task was interrupted")
-      result.error("INTERRUPTED_EXECUTION", "Task was interrupted", null)
-    }
-
     Log.d(tag, "---> exit paymentRequest()")
   }
 
-  private fun createTerminalAPIPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
-    // Your unique ID for this request, consisting of 1-10 alphanumeric characters.
-    // Must be unique within the last 48 hours for the terminal (POIID) being used.
-    val serviceID = System.currentTimeMillis().toString().takeLast(10) //"YOUR_UNIQUE_ATTEMPT_ID"
+  private fun abortRequest(POIID: String, saleID: String, result: Result) {
+    Log.d(tag, "---> abortRequest()")
+    // check if there is an ongoing paymentRequest to abort
+    if (currentServiceID == null) {
+      result.error("INVALID_STATE", "No ongoing payment request. Cannot proceed with abort request.", null)
+      return
+    }
+
+    val request: TerminalAPIRequest? = createAbortRequest(currentServiceID!!, POIID, saleID)
+    abortExecutor.submit {
+      try {
+        // abort request response is null
+        // response returned to payment request object
+        terminalLocalAPI.request(request)
+        Handler(Looper.getMainLooper()).post {
+          result.success(null)
+        }
+      } catch (e: TimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("ERROR", e.message, null)
+        }
+      }
+    }
+    Log.d(tag, "---> exit abortRequest()")
+  }
+
+  private fun createPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
+
+    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+
     // Your reference to identify a payment.
     // We recommend using a unique value per payment.
     // In your Customer Area and Adyen reports, this will show as the merchant reference for the transaction.
@@ -220,7 +254,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     messageHeader.setMessageCategory(MessageCategoryType.PAYMENT)
     messageHeader.setMessageType(MessageType.REQUEST)
     messageHeader.setSaleID(saleID)
-
     messageHeader.setServiceID(serviceID)
     messageHeader.setPOIID(POIID)
     saleToPOIRequest.setMessageHeader(messageHeader)
@@ -242,6 +275,41 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     paymentTransaction.setAmountsReq(amountsReq)
     paymentRequest.setPaymentTransaction(paymentTransaction)
     saleToPOIRequest.setPaymentRequest(paymentRequest)
+
+    val terminalAPIRequest = TerminalAPIRequest()
+    terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
+
+    currentServiceID = serviceID
+
+    return terminalAPIRequest
+  }
+
+  private fun createAbortRequest(paymentRequestServiceID: String, POIID: String, saleID: String): TerminalAPIRequest? {
+
+    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+
+    val saleToPOIRequest = SaleToPOIRequest()
+    val messageHeader = MessageHeader()
+    messageHeader.setProtocolVersion("3.0")
+    messageHeader.setMessageClass(MessageClassType.SERVICE)
+    messageHeader.setMessageCategory(MessageCategoryType.ABORT)
+    messageHeader.setMessageType(MessageType.REQUEST)
+    messageHeader.setSaleID(saleID)
+    messageHeader.setServiceID(serviceID)
+    messageHeader.setPOIID(POIID)
+    saleToPOIRequest.setMessageHeader(messageHeader)
+
+    val abortRequest = AbortRequest()
+    abortRequest.setAbortReason("MerchantAbort")
+    val messageReference = MessageReference()
+    messageReference.setMessageCategory(MessageCategoryType.PAYMENT)
+    messageReference.setSaleID(saleID)
+    messageReference.setPOIID(POIID)
+
+    messageReference.setServiceID(paymentRequestServiceID) // Service ID of the payment you're aborting
+    abortRequest.setMessageReference(messageReference)
+
+    saleToPOIRequest.setAbortRequest(abortRequest)
 
     val terminalAPIRequest = TerminalAPIRequest()
     terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
@@ -541,6 +609,12 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         Log.d(tag, "No certificate found for alias: $alias")
       }
     }
+  }
+
+  fun createServiceID(): String {
+    // Your unique ID for this request, consisting of 1-10 alphanumeric characters.
+    // Must be unique within the last 48 hours for the terminal (POIID) being used.
+    return System.currentTimeMillis().toString().takeLast(10) //"YOUR_UNIQUE_ATTEMPT_ID"
   }
 
 }

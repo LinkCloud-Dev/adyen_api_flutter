@@ -34,4 +34,8 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
   Future<void> paymentRequest(double amount, String POIID, String saleID) {
     return _instance.paymentRequest(amount, POIID, saleID);
   }
+
+  Future<void> abortRequest(String POIID, String saleID) {
+    return _instance.abortRequest(POIID, saleID);
+  }
 }

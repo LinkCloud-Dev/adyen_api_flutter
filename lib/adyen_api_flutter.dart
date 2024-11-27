@@ -10,11 +10,15 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
-  Future<void> paymentRequest(double amount, String POIID, {String saleID = "001"}) {
+  Future<Map<dynamic, dynamic>> paymentRequest(double amount, String POIID, {String saleID = "001"}) {
     return AdyenApiFlutterPlatform.instance.paymentRequest(amount, POIID, saleID);
   }
 
   Future<void> abortRequest(String POIID, {String saleID = "001"}) {
     return AdyenApiFlutterPlatform.instance.abortRequest(POIID, saleID);
+  }
+
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, {String saleID = "001"}) {
+    return AdyenApiFlutterPlatform.instance.refundRequest(transactionID, POIID, saleID);
   }
 }

@@ -29,14 +29,15 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<void> paymentRequest(double amount, String POIID, String saleID) async {
-    await methodChannel.invokeMethod('paymentRequest',
+  Future<Map<dynamic, dynamic>> paymentRequest(double amount, String POIID, String saleID) async {
+    final response = await methodChannel.invokeMethod('paymentRequest',
         {
           'amount': amount,
           'POIID': POIID,
           'saleID': saleID,
         }
     );
+    return response;
   }
 
   @override
@@ -47,5 +48,17 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
           'saleID': saleID,
         }
     );
+  }
+
+  @override
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, String saleID) async {
+    final response = await methodChannel.invokeMethod('refundRequest',
+        {
+          'transactionID': transactionID,
+          'POIID': POIID,
+          'saleID': saleID,
+        }
+    );
+    return response;
   }
 }

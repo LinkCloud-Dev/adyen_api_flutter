@@ -34,8 +34,7 @@ class _MyAppState extends State<MyApp> {
   String saleID = "002"; //"YOUR_CASH_REGISTER_ID"
   // 	The unique ID of the terminal to send this request to. Format: [device model]-[serial number].
   String POIID = "S1F2-000158234612430"; //"YOUR_TERMINAL_ID"
-  String amount = "4.98";
-
+  double paymentAmount = 0.0;
 
   @override
   void initState() {
@@ -49,8 +48,8 @@ class _MyAppState extends State<MyApp> {
     // Platform messages may fail, so we use a try/catch PlatformException.
     // We also handle the message potentially returning null.
     try {
-      platformVersion =
-          await _adyenApiFlutterPlugin.getPlatformVersion() ?? 'Unknown platform version';
+      platformVersion = await _adyenApiFlutterPlugin.getPlatformVersion() ??
+          'Unknown platform version';
     } on PlatformException {
       platformVersion = 'Failed to get platform version.';
     }
@@ -66,12 +65,15 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _init() async {
-    var result = await _adyenApiFlutterPlugin.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
+    var result = await _adyenApiFlutterPlugin.init(
+        ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
   Future<void> _paymentRequest() async {
     // use without saleID (default to "001")
-    var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID);
+    var result = await _adyenApiFlutterPlugin.paymentRequest(
+        paymentAmount, POIID);
+    print(">> flutter response: ${result.toString()}");
     // use with saleID
     // var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);
   }
@@ -83,6 +85,22 @@ class _MyAppState extends State<MyApp> {
     // var result = await _adyenApiFlutterPlugin.abortRequest(POIID, saleID: saleID);
   }
 
+  final TextEditingController _refundIdController = TextEditingController();
+
+  Future<void> _refundRequest() async {
+    var refundId = _refundIdController.text.trim();
+    if (refundId.isEmpty) {
+      throw Exception("Refund ID cannot be empty");
+    }
+
+    // use without saleID (default to "001")
+    var result = await _adyenApiFlutterPlugin.refundRequest(refundId, POIID);
+    print(">> flutter response: ${result.toString()}");
+    // use with saleID
+    // var result = await _adyenApiFlutterPlugin.abortRequest(POIID, saleID: saleID);
+  }
+
+  // converts string to double
   double toDoubleAmountTrimmed(String amount) {
     try {
       // Parse the string to a double
@@ -94,7 +112,6 @@ class _MyAppState extends State<MyApp> {
       throw FormatException("Invalid amount format: $amount");
     }
   }
-
 
   // TODO: UI for terminal ip address, encryption key (identifier, passphrase and version)
 
@@ -111,10 +128,77 @@ class _MyAppState extends State<MyApp> {
               Text('Running on: $_platformVersion\n'),
               ElevatedButton(
                   onPressed: () => _init(), child: const Text("Init")),
+              const SizedBox(height: 20),
+              // Row of payment buttons
+              Text(
+                "Payment Amount: \$${paymentAmount.toStringAsFixed(2)}",
+                style: const TextStyle(fontSize: 18),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        paymentAmount = 1.00;
+                      });
+                    },
+                    child: const Text("\$1.00"),
+                  ),
+                  const SizedBox(width: 10), // Add spacing between buttons
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        paymentAmount = 2.99;
+                      });
+                    },
+                    child: const Text("\$2.99"),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        paymentAmount = 5.45;
+                      });
+                    },
+                    child: const Text("\$5.45"),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        paymentAmount = 11.85;
+                      });
+                    },
+                    child: const Text("\$11.85"),
+                  ),
+                ],
+              ),
               ElevatedButton(
-                  onPressed: () => _paymentRequest(), child: const Text("Payment Request")),
+                  onPressed: () => _paymentRequest(),
+                  child: const Text("Payment Request")),
+              const SizedBox(height: 20),
               ElevatedButton(
-                  onPressed: () => _abortRequest(), child: const Text("Abort Request")),
+                  onPressed: () => _abortRequest(),
+                  child: const Text("Abort Request")),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 400, // Set your desired width
+                  height: 50, // Optional: Set height if needed
+                  child: TextField(
+                    controller: _refundIdController,
+                    decoration: const InputDecoration(
+                      labelText: "Refund ID",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                  onPressed: () => _refundRequest(),
+                  child: const Text("Refund Request")),
             ],
           ),
         ),

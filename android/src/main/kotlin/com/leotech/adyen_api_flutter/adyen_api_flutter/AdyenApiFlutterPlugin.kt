@@ -93,6 +93,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           result
         )
       }
+      "statusRequest" -> {
+        statusRequest(
+          call.argument<String>("transactionServiceID")!!,
+          call.argument<String>("POIID")!!,
+          call.argument<String>("saleID")!!,
+          result
+        )
+      }
       "abortRequest" -> {
         abortRequest(
           call.argument<String>("POIID")!!,
@@ -190,7 +198,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   }
 
   private val requestExecutor = Executors.newSingleThreadExecutor()
-  private val abortExecutor = Executors.newSingleThreadExecutor()
+  private val abortAndStatusExecutor = Executors.newSingleThreadExecutor()
 
   private fun paymentRequest(amount: Double, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> paymentRequest()")
@@ -199,19 +207,22 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       try {
         val response: TerminalAPIResponse = terminalLocalAPI.request(request)
         val saleToPOIResponse = response.getSaleToPOIResponse()
+        val messageHeader = saleToPOIResponse.getMessageHeader()
         val paymentResponse = saleToPOIResponse.getPaymentResponse()
         val POIData = paymentResponse.getPOIData()
         val transactionIdentification = POIData.getPOITransactionID()
 
         val responseMap = mapOf(
           "result" to paymentResponse.getResponse().getResult().value(),
+          "serviceID" to messageHeader.getServiceID(),
+          "POIID" to messageHeader.getPOIID(),
+          "saleID" to messageHeader.getSaleID(),
           "transaction" to mapOf(
             "transactionID" to transactionIdentification.getTransactionID(),
             "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
           ),
           "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
           "additionalResponse" to paymentResponse.getResponse().getAdditionalResponse(),
-
         )
         printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
 
@@ -272,6 +283,71 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit refundRequest()")
   }
 
+  private fun statusRequest(transactionServiceID: String, POIID: String, saleID: String, result: Result) {
+    Log.d(tag, "---> statusRequest()")
+    val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, POIID, saleID)
+    abortAndStatusExecutor.submit {
+      try {
+        val response: TerminalAPIResponse = terminalLocalAPI.request(request)
+        val saleToPOIResponse = response.getSaleToPOIResponse()
+        val transactionStatusResponse = saleToPOIResponse.getTransactionStatusResponse()
+        val messageReference = transactionStatusResponse.getMessageReference()
+        val repeatedMessageResponse = transactionStatusResponse.getRepeatedMessageResponse()
+
+        val paymentResponseMap = repeatedMessageResponse?.getRepeatedResponseMessageBody()?.getPaymentResponse()?.let {
+          val amountsResp = it.getPaymentResult()?.getAmountsResp() // Safely get AmountsResp
+          mapOf(
+            "result" to it.getResponse().getResult().value(),
+            "transactionID" to it.getPOIData().getPOITransactionID().getTransactionID(),
+            "timeStamp" to it.getPOIData().getPOITransactionID().getTimeStamp().toXMLFormat(),
+            "authorisedAmount" to amountsResp?.getAuthorizedAmount()?.toPlainString()
+          ).filterValues { it != null }
+        }
+
+        val reversalResponseMap = repeatedMessageResponse?.getRepeatedResponseMessageBody()?.getReversalResponse()?.let {
+          mapOf(
+            "result" to it.getResponse().getResult().value(),
+            "transactionID" to it.getPOIData().getPOITransactionID().getTransactionID(),
+            "timeStamp" to it.getPOIData().getPOITransactionID().getTimeStamp().toXMLFormat(),
+            "reversedAmount" to it.getReversedAmount().toPlainString()
+          )
+        }
+
+        val responseMap = mapOf(
+          // "result" - success if transaction processed, failure if not processed (inProgress or notFound)
+          "result" to transactionStatusResponse.getResponse().getResult().value(),
+          "transactionResult" to mapOf(
+            "paymentResponse" to paymentResponseMap,
+            "reversalResponse" to reversalResponseMap
+          ).filterValues { it != null }, // exclude null values from the transactionResult map
+          "transactionReference" to mapOf(
+            "serviceID" to messageReference?.getServiceID(),
+            "POIID" to messageReference?.getPOIID(),
+            "saleID" to messageReference?.getSaleID(),
+            "messageCategory" to messageReference?.getMessageCategory()?.value()
+          ),
+          "errorCondition" to transactionStatusResponse.getResponse().getErrorCondition()?.value(),
+          "additionalResponse" to transactionStatusResponse.getResponse().getAdditionalResponse()
+        )
+
+        printSaleToPOIResponseInfo(saleToPOIResponse)
+
+        Handler(Looper.getMainLooper()).post {
+          result.success(responseMap)
+        }
+      } catch (e: TimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("ERROR", e.message, null)
+        }
+      }
+    }
+    Log.d(tag, "---> exit statusRequest()")
+  }
+
   private fun abortRequest(POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> abortRequest()")
     // check if there is an ongoing paymentRequest to abort
@@ -281,7 +357,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     val request: TerminalAPIRequest? = createAbortRequest(currentServiceID!!, POIID, saleID)
-    abortExecutor.submit {
+    abortAndStatusExecutor.submit {
       try {
         // abort request response is null
         // response returned to payment request object
@@ -385,6 +461,41 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
 
     currentServiceID = serviceID
+
+    return terminalAPIRequest
+  }
+
+  private fun createStatusRequest(transactionServiceID: String, POIID: String, saleID: String): TerminalAPIRequest? {
+
+    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+
+    val saleToPOIRequest = SaleToPOIRequest()
+    val messageHeader = MessageHeader()
+    messageHeader.setProtocolVersion("3.0")
+    messageHeader.setMessageClass(MessageClassType.SERVICE)
+    messageHeader.setMessageCategory(MessageCategoryType.TRANSACTION_STATUS)
+    messageHeader.setMessageType(MessageType.REQUEST)
+    messageHeader.setSaleID(saleID)
+    messageHeader.setServiceID(serviceID)
+    messageHeader.setPOIID(POIID)
+    saleToPOIRequest.setMessageHeader(messageHeader)
+
+    val transactionStatusRequest = TransactionStatusRequest()
+    transactionStatusRequest.setReceiptReprintFlag(true)
+    transactionStatusRequest.getDocumentQualifier().add(DocumentQualifierType.CASHIER_RECEIPT)
+    transactionStatusRequest.getDocumentQualifier().add(DocumentQualifierType.CUSTOMER_RECEIPT)
+    val messageReference = MessageReference()
+    messageReference.setMessageCategory(MessageCategoryType.PAYMENT)
+    messageReference.setSaleID(saleID)
+
+    // serviceID of the transaction you want the status update from
+    messageReference.setServiceID(transactionServiceID)
+    transactionStatusRequest.setMessageReference(messageReference)
+
+    saleToPOIRequest.setTransactionStatusRequest(transactionStatusRequest)
+
+    val terminalAPIRequest = TerminalAPIRequest()
+    terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
 
     return terminalAPIRequest
   }
@@ -502,6 +613,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   }
   if (response.getTransactionStatusResponse() != null) {
     System.out.println("Transaction Status Response: " + response.getTransactionStatusResponse())
+    printResponseDetails(response.getTransactionStatusResponse().getResponse())
   }
   if (response.getTransmitResponse() != null) {
     System.out.println("Transmit Response: " + response.getTransmitResponse())
@@ -773,6 +885,19 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       }
     }
   }
+
+  fun printResponseDetails(response: Response?) {
+    if (response == null) {
+      println("Response is null")
+      return
+    }
+
+    println("Response Details:")
+    println("Additional Response: ${response.additionalResponse ?: "N/A"}")
+    println("Result: ${response.result ?: "N/A"}")
+    println("Error Condition: ${response.errorCondition ?: "N/A"}")
+  }
+
 
   fun createServiceID(): String {
     // Your unique ID for this request, consisting of 1-10 alphanumeric characters.

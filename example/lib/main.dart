@@ -100,6 +100,21 @@ class _MyAppState extends State<MyApp> {
     // var result = await _adyenApiFlutterPlugin.abortRequest(POIID, saleID: saleID);
   }
 
+  final TextEditingController _statusIdController = TextEditingController();
+
+  Future<void> _statusRequest() async {
+    var statusId = _statusIdController.text.trim();
+    if (statusId.isEmpty) {
+      throw Exception("Status request ID cannot be empty");
+    }
+
+    // use without saleID (default to "001")
+    var result = await _adyenApiFlutterPlugin.statusRequest(statusId, POIID);
+    print(">> flutter response: ${result.toString()}");
+    // use with saleID
+    // var result = await _adyenApiFlutterPlugin.statusRequest(POIID, saleID: saleID);
+  }
+
   // converts string to double
   double toDoubleAmountTrimmed(String amount) {
     try {
@@ -199,6 +214,23 @@ class _MyAppState extends State<MyApp> {
               ElevatedButton(
                   onPressed: () => _refundRequest(),
                   child: const Text("Refund Request")),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 400, // Set your desired width
+                  height: 50, // Optional: Set height if needed
+                  child: TextField(
+                    controller: _statusIdController,
+                    decoration: const InputDecoration(
+                      labelText: "Transaction Service ID",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                  onPressed: () => _statusRequest(),
+                  child: const Text("Transaction Status Request")),
             ],
           ),
         ),

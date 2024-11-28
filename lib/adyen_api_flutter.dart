@@ -21,4 +21,8 @@ class AdyenApiFlutter {
   Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, {String saleID = "001"}) {
     return AdyenApiFlutterPlatform.instance.refundRequest(transactionID, POIID, saleID);
   }
+
+  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, String POIID, {String saleID = "001"}) {
+    return AdyenApiFlutterPlatform.instance.statusRequest(transactionServiceID, POIID, saleID);
+  }
 }

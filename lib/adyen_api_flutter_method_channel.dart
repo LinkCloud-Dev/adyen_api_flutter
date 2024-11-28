@@ -61,4 +61,16 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
     );
     return response;
   }
+
+  @override
+  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, String POIID, String saleID) async {
+    final response = await methodChannel.invokeMethod('statusRequest',
+        {
+          'transactionServiceID': transactionServiceID,
+          'POIID': POIID,
+          'saleID': saleID,
+        }
+    );
+    return response;
+  }
 }

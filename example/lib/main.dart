@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:adyen_api_flutter/adyen_api_flutter.dart';
+import 'package:adyen_api_flutter/helper.dart';
 
 void main() {
   runApp(const MyApp());
@@ -35,6 +36,8 @@ class _MyAppState extends State<MyApp> {
   // 	The unique ID of the terminal to send this request to. Format: [device model]-[serial number].
   String POIID = "S1F2-000158234612430"; //"YOUR_TERMINAL_ID"
   double paymentAmount = 0.0;
+
+  MessageCategoryType statusRequestType = MessageCategoryType.PAYMENT;
 
   @override
   void initState() {
@@ -109,7 +112,7 @@ class _MyAppState extends State<MyApp> {
     }
 
     // use without saleID (default to "001")
-    var result = await _adyenApiFlutterPlugin.statusRequest(statusId, POIID);
+    var result = await _adyenApiFlutterPlugin.statusRequest(statusId, statusRequestType, POIID);
     print(">> flutter response: ${result.toString()}");
     // use with saleID
     // var result = await _adyenApiFlutterPlugin.statusRequest(POIID, saleID: saleID);
@@ -227,6 +230,28 @@ class _MyAppState extends State<MyApp> {
                     ),
                   ),
                 ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        statusRequestType = MessageCategoryType.PAYMENT;
+                      });
+                    },
+                    child: const Text("PAYMENT"),
+                  ),
+                  const SizedBox(width: 10), // Add spacing between buttons
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        statusRequestType = MessageCategoryType.REVERSAL;
+                      });
+                    },
+                    child: const Text("REVERSAL"),
+                  ),
+                ],
               ),
               ElevatedButton(
                   onPressed: () => _statusRequest(),

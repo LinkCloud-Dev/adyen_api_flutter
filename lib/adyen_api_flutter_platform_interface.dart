@@ -1,6 +1,7 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'adyen_api_flutter_method_channel.dart';
+import 'helper.dart';
 
 abstract class AdyenApiFlutterPlatform extends PlatformInterface {
   /// Constructs a AdyenApiFlutterPlatform.
@@ -43,7 +44,7 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     return _instance.refundRequest(transactionID, POIID, saleID);
   }
 
-  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, String POIID, String saleID) {
-    return _instance.statusRequest(transactionServiceID, POIID, saleID);
+  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, MessageCategoryType statusRequestType, String POIID, String saleID) {
+    return _instance.statusRequest(transactionServiceID, statusRequestType, POIID, saleID);
   }
 }

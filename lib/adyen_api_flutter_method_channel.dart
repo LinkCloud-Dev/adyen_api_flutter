@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'adyen_api_flutter_platform_interface.dart';
+import 'helper.dart';
 
 /// An implementation of [AdyenApiFlutterPlatform] that uses method channels.
 class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
@@ -63,10 +64,11 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, String POIID, String saleID) async {
+  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, MessageCategoryType statusRequestType, String POIID, String saleID) async {
     final response = await methodChannel.invokeMethod('statusRequest',
         {
           'transactionServiceID': transactionServiceID,
+          'statusRequestType': statusRequestType.toString().split('.').last,
           'POIID': POIID,
           'saleID': saleID,
         }

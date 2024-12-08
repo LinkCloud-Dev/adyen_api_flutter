@@ -94,8 +94,18 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         )
       }
       "statusRequest" -> {
+        val statusRequestTypeString = call.argument<String>("statusRequestType")!!
+        println(">>>> string of type: " + statusRequestTypeString)
+        val statusRequestType = statusRequestTypeString?.let {
+          try {
+            MessageCategoryType.valueOf(it)
+          } catch (e: IllegalArgumentException) {
+            null // Handle invalid enum value gracefully
+          }
+        }
         statusRequest(
           call.argument<String>("transactionServiceID")!!,
+          statusRequestType!!,
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
           result
@@ -283,9 +293,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit refundRequest()")
   }
 
-  private fun statusRequest(transactionServiceID: String, POIID: String, saleID: String, result: Result) {
+  private fun statusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> statusRequest()")
-    val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, POIID, saleID)
+    val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, statusRequestType, POIID, saleID)
     abortAndStatusExecutor.submit {
       try {
         val response: TerminalAPIResponse = terminalLocalAPI.request(request)
@@ -465,7 +475,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return terminalAPIRequest
   }
 
-  private fun createStatusRequest(transactionServiceID: String, POIID: String, saleID: String): TerminalAPIRequest? {
+  private fun createStatusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String): TerminalAPIRequest? {
 
     val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
 
@@ -485,7 +495,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     transactionStatusRequest.getDocumentQualifier().add(DocumentQualifierType.CASHIER_RECEIPT)
     transactionStatusRequest.getDocumentQualifier().add(DocumentQualifierType.CUSTOMER_RECEIPT)
     val messageReference = MessageReference()
-    messageReference.setMessageCategory(MessageCategoryType.PAYMENT)
+    messageReference.setMessageCategory(statusRequestType)
     messageReference.setSaleID(saleID)
 
     // serviceID of the transaction you want the status update from

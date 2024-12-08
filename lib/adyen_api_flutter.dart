@@ -1,5 +1,6 @@
 
 import 'adyen_api_flutter_platform_interface.dart';
+import 'helper.dart';
 
 class AdyenApiFlutter {
   Future<String?> getPlatformVersion() {
@@ -22,7 +23,7 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.refundRequest(transactionID, POIID, saleID);
   }
 
-  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, String POIID, {String saleID = "001"}) {
-    return AdyenApiFlutterPlatform.instance.statusRequest(transactionServiceID, POIID, saleID);
+  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, MessageCategoryType statusRequestType, String POIID, {String saleID = "001"}) {
+    return AdyenApiFlutterPlatform.instance.statusRequest(transactionServiceID, statusRequestType, POIID, saleID);
   }
 }

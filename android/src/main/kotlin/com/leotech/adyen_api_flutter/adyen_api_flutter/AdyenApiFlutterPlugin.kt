@@ -13,6 +13,10 @@ import com.adyen.httpclient.TerminalLocalAPIHostnameVerifier
 import com.adyen.model.nexo.*
 import com.adyen.model.terminal.TerminalAPIRequest
 import com.adyen.model.terminal.TerminalAPIResponse
+import com.adyen.model.terminal.SaleToAcquirerData
+import com.adyen.model.applicationinfo.ApplicationInfo
+import com.adyen.model.applicationinfo.CommonField
+import com.adyen.model.applicationinfo.ExternalPlatform
 import com.adyen.model.terminal.security.SecurityKey
 import com.adyen.service.TerminalLocalAPI
 import com.adyen.service.TerminalLocalAPIUnencrypted
@@ -410,6 +414,16 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
     val paymentRequest = PaymentRequest()
     val saleData = SaleData()
+    val saleToAcquirerData = SaleToAcquirerData()
+    val applicationInfo = ApplicationInfo()
+    val externalPlatform = ExternalPlatform()
+    externalPlatform.setIntegrator("LinkGroup")
+    applicationInfo.setExternalPlatform(externalPlatform)
+    val merchantApplication = CommonField()
+    merchantApplication.setName("LinkPOS")
+    merchantApplication.setVersion("3.0.0")
+    applicationInfo.setMerchantApplication(merchantApplication)
+    saleData.setSaleToAcquirerData(saleToAcquirerData)
     val saleTransactionID = TransactionIdentification()
     saleTransactionID.setTransactionID(transactionID)
     val timeStamp = DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())

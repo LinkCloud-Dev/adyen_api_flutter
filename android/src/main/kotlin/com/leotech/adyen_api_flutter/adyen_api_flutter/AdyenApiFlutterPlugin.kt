@@ -663,7 +663,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       val response = paymentResponse.getResponse()
 
       // Print Additional Response
-      println("Additional Response: ${response.additionalResponse ?: "null"}")
+      println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse)) ?: "null"}")
 
       // Print Result
       println("Result: ${response.result ?: "null"}")
@@ -788,7 +788,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     reversalResponse.response?.let { response ->
       Log.d("Response", "Result: ${response.result}")
       Log.d("Response", "ErrorCondition: ${response.errorCondition}")
-      Log.d("Response", "AdditionalResponse: ${response.additionalResponse}")
+      Log.d("Response", "AdditionalResponse: ${String(Base64.decodeBase64(response.additionalResponse))}")
     } ?: Log.d("Response", "Response is null")
 
     // Print POIData details if available
@@ -919,7 +919,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     println("Response Details:")
-    println("Additional Response: ${response.additionalResponse ?: "N/A"}")
+    println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse)) ?: "N/A"}")
     println("Result: ${response.result ?: "N/A"}")
     println("Error Condition: ${response.errorCondition ?: "N/A"}")
   }

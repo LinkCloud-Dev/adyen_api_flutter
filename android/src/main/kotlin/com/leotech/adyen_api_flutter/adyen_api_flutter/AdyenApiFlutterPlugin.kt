@@ -38,6 +38,8 @@ import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
+import org.apache.commons.codec.binary.Base64;
+
 
 /** AdyenApiFlutterPlugin */
 class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
@@ -236,7 +238,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
             "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
           ),
           "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to paymentResponse.getResponse().getAdditionalResponse(),
+          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
         )
         printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
 
@@ -276,7 +278,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           ),
           "amount" to reversalResponse.getReversedAmount()?.toPlainString(),
           "errorCondition" to reversalResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to reversalResponse.getResponse().getAdditionalResponse(),
+          "additionalResponse" to String(Base64.decodeBase64(reversalResponse.getResponse().getAdditionalResponse())),
 
         )
         printSaleToPOIResponseInfo(saleToPOIResponse)
@@ -341,7 +343,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
             "messageCategory" to messageReference?.getMessageCategory()?.value()
           ),
           "errorCondition" to transactionStatusResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to transactionStatusResponse.getResponse().getAdditionalResponse()
+          "additionalResponse" to String(Base64.decodeBase64(transactionStatusResponse.getResponse().getAdditionalResponse())),
         )
 
         printSaleToPOIResponseInfo(saleToPOIResponse)

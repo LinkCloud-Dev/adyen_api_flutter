@@ -242,14 +242,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 //          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
 //        )
 
-        val responseMap = mapOf(
+        val responseMap: Map<String, Any?> = mapOf(
           "result" to paymentResponse.getResponse().getResult().value(),
           "serviceID" to messageHeader.getServiceID(),
           "POIID" to messageHeader.getPOIID(),
           "saleID" to messageHeader.getSaleID(),
           "transaction" to mapOf(
             "transactionID" to transactionIdentification.getTransactionID(),
-            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
+            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat()
           ),
           "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
           "additionalResponse" to paymentResponse.getResponse().getAdditionalResponse()

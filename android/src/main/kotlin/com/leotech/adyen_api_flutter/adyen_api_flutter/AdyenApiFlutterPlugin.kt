@@ -242,19 +242,22 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 //          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
 //        )
 
-        val responseMap: Map<String, Any?> = mapOf(
-          "result" to paymentResponse.getResponse().getResult().value(),
-          "serviceID" to messageHeader.getServiceID(),
-          "POIID" to messageHeader.getPOIID(),
-          "saleID" to messageHeader.getSaleID(),
-          "transaction" to mapOf(
-            "transactionID" to transactionIdentification.getTransactionID(),
-            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat()
-          ),
-          "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to paymentResponse.getResponse().getAdditionalResponse()
-            ?.let { String(Base64.decodeBase64(it)) }
-        )
+        val responseMap: HashMap<String, Any?> = HashMap()
+
+        responseMap["result"] = paymentResponse.getResponse().getResult().value()
+        responseMap["serviceID"] = messageHeader.getServiceID()
+        responseMap["POIID"] = messageHeader.getPOIID()
+        responseMap["saleID"] = messageHeader.getSaleID()
+
+        val transactionMap: HashMap<String, Any?> = HashMap()
+        transactionMap["transactionID"] = transactionIdentification.getTransactionID()
+        transactionMap["timeStamp"] = transactionIdentification.getTimeStamp().toXMLFormat()
+        responseMap["transaction"] = transactionMap
+
+        responseMap["errorCondition"] = paymentResponse.getResponse().getErrorCondition()?.value()
+        responseMap["additionalResponse"] = paymentResponse.getResponse().getAdditionalResponse()
+          ?.let { String(Base64.decodeBase64(it)) }
+
 //
 //// Convert responseMap to a JSON string
 //        val jsonString = JSONObject(responseMap).toString()

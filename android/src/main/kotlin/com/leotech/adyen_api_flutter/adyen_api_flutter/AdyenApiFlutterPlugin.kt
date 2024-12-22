@@ -39,6 +39,7 @@ import javax.net.ssl.X509TrustManager
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
 import org.apache.commons.codec.binary.Base64;
+import org.json.JSONObject
 
 
 /** AdyenApiFlutterPlugin */
@@ -228,6 +229,19 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         val POIData = paymentResponse.getPOIData()
         val transactionIdentification = POIData.getPOITransactionID()
 
+//        val responseMap = mapOf(
+//          "result" to paymentResponse.getResponse().getResult().value(),
+//          "serviceID" to messageHeader.getServiceID(),
+//          "POIID" to messageHeader.getPOIID(),
+//          "saleID" to messageHeader.getSaleID(),
+//          "transaction" to mapOf(
+//            "transactionID" to transactionIdentification.getTransactionID(),
+//            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
+//          ),
+//          "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
+//          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
+//        )
+
         val responseMap = mapOf(
           "result" to paymentResponse.getResponse().getResult().value(),
           "serviceID" to messageHeader.getServiceID(),
@@ -238,12 +252,17 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
             "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
           ),
           "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
+          "additionalResponse" to paymentResponse.getResponse().getAdditionalResponse()
+            ?.let { String(Base64.decodeBase64(it)) }
         )
+
+// Convert responseMap to a JSON string
+        val jsonString = JSONObject(responseMap).toString()
+
         printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
 
         Handler(Looper.getMainLooper()).post {
-          result.success(responseMap)
+          result.success(jsonString)
         }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {

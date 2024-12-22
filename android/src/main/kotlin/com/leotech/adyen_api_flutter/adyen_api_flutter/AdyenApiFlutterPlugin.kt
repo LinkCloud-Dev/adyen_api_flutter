@@ -255,14 +255,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           "additionalResponse" to paymentResponse.getResponse().getAdditionalResponse()
             ?.let { String(Base64.decodeBase64(it)) }
         )
-
-// Convert responseMap to a JSON string
-        val jsonString = JSONObject(responseMap).toString()
+//
+//// Convert responseMap to a JSON string
+//        val jsonString = JSONObject(responseMap).toString()
 
         printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
 
         Handler(Looper.getMainLooper()).post {
-          result.success(jsonString)
+          result.success(responseMap)
         }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {

@@ -30,7 +30,7 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<Map<String, dynamic>> paymentRequest(double amount, String POIID, String saleID) async {
+  Future<Map<dynamic, dynamic>> paymentRequest(double amount, String POIID, String saleID) async {
     final response = await methodChannel.invokeMethod('paymentRequest',
         {
           'amount': amount,

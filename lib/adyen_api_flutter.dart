@@ -11,7 +11,7 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
-  Future<Map<String, dynamic>> paymentRequest(double amount, String POIID, {String saleID = "001"}) {
+  Future<Map<dynamic, dynamic>> paymentRequest(double amount, String POIID, {String saleID = "001"}) {
     return AdyenApiFlutterPlatform.instance.paymentRequest(amount, POIID, saleID);
   }
 

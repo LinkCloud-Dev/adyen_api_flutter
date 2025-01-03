@@ -1,3 +1,4 @@
+import 'package:adyen_api_flutter/models/adyen_response.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 
@@ -74,9 +75,16 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _paymentRequest() async {
     // use without saleID (default to "001")
-    var result = await _adyenApiFlutterPlugin.paymentRequest(
+    final Map result = await _adyenApiFlutterPlugin.paymentRequest(
         paymentAmount, POIID);
-    print(">> flutter response: ${result.toString()}");
+
+    final response = AdyenResponse.fromMap(result);
+
+    print(">> response from map: ${response.result.toString()}, ${response.serviceID}, "
+        "${response.adyenTransaction?.transactionID}, ${response.adyenTransaction?.timeStamp},"
+        "${response.errorCondition}");
+
+    print(">> response string: ${result.toString()}");
     // use with saleID
     // var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);
   }
@@ -90,6 +98,7 @@ class _MyAppState extends State<MyApp> {
 
   final TextEditingController _refundIdController = TextEditingController();
 
+  // input: transactionID
   Future<void> _refundRequest() async {
     var refundId = _refundIdController.text.trim();
     if (refundId.isEmpty) {
@@ -98,13 +107,21 @@ class _MyAppState extends State<MyApp> {
 
     // use without saleID (default to "001")
     var result = await _adyenApiFlutterPlugin.refundRequest(refundId, POIID);
-    print(">> flutter response: ${result.toString()}");
+
+    final response = AdyenResponse.fromMap(result);
+
+    print(">> response from map: ${response.result.toString()}, ${response.serviceID}, "
+        "${response.adyenTransaction?.transactionID}, ${response.adyenTransaction?.timeStamp},"
+        "${response.errorCondition}");
+
+    print(">> response string: ${result.toString()}");
     // use with saleID
     // var result = await _adyenApiFlutterPlugin.abortRequest(POIID, saleID: saleID);
   }
 
   final TextEditingController _statusIdController = TextEditingController();
 
+  // input: serviceID
   Future<void> _statusRequest() async {
     var statusId = _statusIdController.text.trim();
     if (statusId.isEmpty) {

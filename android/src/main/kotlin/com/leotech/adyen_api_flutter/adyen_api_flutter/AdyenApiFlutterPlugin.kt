@@ -27,6 +27,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.io.InputStream
 import java.math.BigDecimal
+import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.CertificateFactory
@@ -229,38 +230,18 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         val POIData = paymentResponse.getPOIData()
         val transactionIdentification = POIData.getPOITransactionID()
 
-//        val responseMap = mapOf(
-//          "result" to paymentResponse.getResponse().getResult().value(),
-//          "serviceID" to messageHeader.getServiceID(),
-//          "POIID" to messageHeader.getPOIID(),
-//          "saleID" to messageHeader.getSaleID(),
-//          "transaction" to mapOf(
-//            "transactionID" to transactionIdentification.getTransactionID(),
-//            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
-//          ),
-//          "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
-//          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
-//        )
-
-        val responseMap: HashMap<String, Any?> = HashMap()
-
-        responseMap["result"] = paymentResponse.getResponse().getResult().value()
-        responseMap["serviceID"] = messageHeader.getServiceID()
-        responseMap["POIID"] = messageHeader.getPOIID()
-        responseMap["saleID"] = messageHeader.getSaleID()
-
-        val transactionMap: HashMap<String, Any?> = HashMap()
-        transactionMap["transactionID"] = transactionIdentification.getTransactionID()
-        transactionMap["timeStamp"] = transactionIdentification.getTimeStamp().toXMLFormat()
-        responseMap["transaction"] = transactionMap
-
-        responseMap["errorCondition"] = paymentResponse.getResponse().getErrorCondition()?.value()
-        responseMap["additionalResponse"] = paymentResponse.getResponse().getAdditionalResponse()
-          ?.let { String(Base64.decodeBase64(it)) }
-
-//
-//// Convert responseMap to a JSON string
-//        val jsonString = JSONObject(responseMap).toString()
+        val responseMap = mapOf(
+          "result" to paymentResponse.getResponse().getResult().value(),
+          "serviceID" to messageHeader.getServiceID(),
+          "POIID" to messageHeader.getPOIID(),
+          "saleID" to messageHeader.getSaleID(),
+          "transaction" to mapOf(
+            "transactionID" to transactionIdentification.getTransactionID(),
+            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
+          ),
+          "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
+          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
+        )
 
         printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
 
@@ -298,10 +279,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
             "transactionID" to transactionIdentification.getTransactionID(),
             "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
           ),
-          "amount" to reversalResponse.getReversedAmount()?.toPlainString(),
+          "reversedAmount" to reversalResponse.getReversedAmount()?.toPlainString(),
           "errorCondition" to reversalResponse.getResponse().getErrorCondition()?.value(),
           "additionalResponse" to String(Base64.decodeBase64(reversalResponse.getResponse().getAdditionalResponse())),
-
         )
         printSaleToPOIResponseInfo(saleToPOIResponse)
 
@@ -321,6 +301,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit refundRequest()")
   }
 
+  // use ServiceID to check statusRequest
   private fun statusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> statusRequest()")
     val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, statusRequestType, POIID, saleID)
@@ -351,6 +332,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           )
         }
 
+        val additionalResponse: String? = transactionStatusResponse.getResponse().getAdditionalResponse()
+        var decodedAdditionalResponse = "";
+
+        if (additionalResponse != null) {
+          decodedAdditionalResponse =
+            String(Base64.decodeBase64(additionalResponse))
+        }
+
         val responseMap = mapOf(
           // "result" - success if transaction processed, failure if not processed (inProgress or notFound)
           "result" to transactionStatusResponse.getResponse().getResult().value(),
@@ -365,7 +354,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
             "messageCategory" to messageReference?.getMessageCategory()?.value()
           ),
           "errorCondition" to transactionStatusResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to String(Base64.decodeBase64(transactionStatusResponse.getResponse().getAdditionalResponse())),
+          "additionalResponse" to decodedAdditionalResponse,
         )
 
         printSaleToPOIResponseInfo(saleToPOIResponse)
@@ -493,8 +482,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     val originalPOITransaction = OriginalPOITransaction()
     val pOITransactionID = TransactionIdentification()
 
-
-    println(">> creating Refund Request: " + transactionID)
     pOITransactionID.setTransactionID(transactionID)
     pOITransactionID.setTimeStamp(
       DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
@@ -685,7 +672,11 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       val response = paymentResponse.getResponse()
 
       // Print Additional Response
-      println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse)) ?: "null"}")
+      if (response.additionalResponse != null) {
+        println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse))}")
+      } else {
+        println("Additional Response: null}")
+      }
 
       // Print Result
       println("Result: ${response.result ?: "null"}")
@@ -810,7 +801,12 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     reversalResponse.response?.let { response ->
       Log.d("Response", "Result: ${response.result}")
       Log.d("Response", "ErrorCondition: ${response.errorCondition}")
-      Log.d("Response", "AdditionalResponse: ${String(Base64.decodeBase64(response.additionalResponse))}")
+      if (response.additionalResponse != null) {
+        Log.d("Response", "AdditionalResponse: ${String(Base64.decodeBase64(response.additionalResponse))}")
+      } else {
+        Log.d("Response", "AdditionalResponse: null")
+      }
+
     } ?: Log.d("Response", "Response is null")
 
     // Print POIData details if available
@@ -941,7 +937,12 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     println("Response Details:")
-    println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse)) ?: "N/A"}")
+    if (response.additionalResponse != null) {
+      println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse))}")
+    } else {
+      println("Additional Response: null}")
+    }
+
     println("Result: ${response.result ?: "N/A"}")
     println("Error Condition: ${response.errorCondition ?: "N/A"}")
   }

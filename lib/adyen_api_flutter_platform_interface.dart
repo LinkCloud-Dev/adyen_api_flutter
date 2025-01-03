@@ -32,7 +32,7 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     return _instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
-  Future<Map<String, dynamic>> paymentRequest(double amount, String POIID, String saleID) {
+  Future<Map<dynamic, dynamic>> paymentRequest(double amount, String POIID, String saleID) {
     return _instance.paymentRequest(amount, POIID, saleID);
   }
 

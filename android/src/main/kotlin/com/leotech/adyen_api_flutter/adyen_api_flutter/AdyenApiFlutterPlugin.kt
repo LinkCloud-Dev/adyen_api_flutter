@@ -10,13 +10,13 @@ import com.adyen.Config
 import com.adyen.Service
 import com.adyen.enums.Environment
 import com.adyen.httpclient.TerminalLocalAPIHostnameVerifier
-import com.adyen.model.nexo.*
-import com.adyen.model.terminal.TerminalAPIRequest
-import com.adyen.model.terminal.TerminalAPIResponse
-import com.adyen.model.terminal.SaleToAcquirerData
 import com.adyen.model.applicationinfo.ApplicationInfo
 import com.adyen.model.applicationinfo.CommonField
 import com.adyen.model.applicationinfo.ExternalPlatform
+import com.adyen.model.nexo.*
+import com.adyen.model.terminal.SaleToAcquirerData
+import com.adyen.model.terminal.TerminalAPIRequest
+import com.adyen.model.terminal.TerminalAPIResponse
 import com.adyen.model.terminal.security.SecurityKey
 import com.adyen.service.TerminalLocalAPI
 import com.adyen.service.TerminalLocalAPIUnencrypted
@@ -98,6 +98,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           call.argument<String>("transactionID")!!,
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
+          call.argument<Double>("refundAmount"),
           result
         )
       }
@@ -148,7 +149,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
     if (initialized) {
 //      result.error("INITIALIZED", "Initialized Already.", null)
-      result.success(null)
+      result.success(false)
       return
     }
 
@@ -179,7 +180,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       terminalLocalAPI = TerminalLocalAPI(client, securityKey)
       Log.d(tag, "---> exit init()")
 
-      result.success(null)
+      result.success(true)
 
     } catch (e: Exception) {
       result.error("INIT_ERROR", "Init Error", null)
@@ -262,9 +263,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   }
 
    // referenced refunds (* connected to original payment)
-  private fun refundRequest(transactionID: String, POIID: String, saleID: String, result: Result) {
+  private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, result: Result) {
     Log.d(tag, "---> refundRequest()")
-    val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID)
+    val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID, refundAmount)
     requestExecutor.submit {
       try {
         val response: TerminalAPIResponse = terminalLocalAPI.request(request)
@@ -462,7 +463,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return terminalAPIRequest
   }
 
-  private fun createRefundRequest(transactionID: String, POIID: String, saleID: String): TerminalAPIRequest? {
+  private fun createRefundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?): TerminalAPIRequest? {
 
     val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
 
@@ -490,6 +491,24 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     originalPOITransaction.setPOITransactionID(pOITransactionID)
     reversalRequest.setOriginalPOITransaction(originalPOITransaction)
     reversalRequest.setReversalReason(ReversalReasonType.MERCHANT_CANCEL)
+
+    // handle partial refund
+    if (refundAmount != null) {
+      reversalRequest.setReversedAmount(BigDecimal.valueOf(refundAmount))
+
+      val saleData = SaleData()
+      val saleToAcquirerData = SaleToAcquirerData()
+      saleToAcquirerData.setCurrency("AUD")
+      saleData.setSaleToAcquirerData(saleToAcquirerData)
+      val saleTransactionID = TransactionIdentification()
+      saleTransactionID.setTimeStamp(
+        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
+      )
+      saleTransactionID.setTransactionID(transactionID)
+      saleData.setSaleTransactionID(saleTransactionID)
+      reversalRequest.setSaleData(saleData)
+    }
+
     saleToPOIRequest.setReversalRequest(reversalRequest)
 
     val terminalAPIRequest = TerminalAPIRequest()

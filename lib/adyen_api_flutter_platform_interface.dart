@@ -28,7 +28,7 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
-  Future<void> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) {
+  Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) {
     return _instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
@@ -40,8 +40,8 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     return _instance.abortRequest(POIID, saleID);
   }
 
-  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, String saleID) {
-    return _instance.refundRequest(transactionID, POIID, saleID);
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, String saleID, double? refundAmount) {
+    return _instance.refundRequest(transactionID, POIID, saleID, refundAmount);
   }
 
   Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, MessageCategoryType statusRequestType, String POIID, String saleID) {

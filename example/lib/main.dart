@@ -69,6 +69,10 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _init() async {
+    // init returns
+    // true if init success
+    // false if init'd already
+    // error if init failed
     var result = await _adyenApiFlutterPlugin.init(
         ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
@@ -97,6 +101,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   final TextEditingController _refundIdController = TextEditingController();
+  final TextEditingController _refundAmountController = TextEditingController();
 
   // input: transactionID
   Future<void> _refundRequest() async {
@@ -105,8 +110,12 @@ class _MyAppState extends State<MyApp> {
       throw Exception("Refund ID cannot be empty");
     }
 
+    var refundAmountString = _refundAmountController.text.trim();
+    double? refundAmount = refundAmountString == ""
+        ? null : double.parse(refundAmountString);
+
     // use without saleID (default to "001")
-    var result = await _adyenApiFlutterPlugin.refundRequest(refundId, POIID);
+    var result = await _adyenApiFlutterPlugin.refundRequest(refundId, POIID, refundAmount: refundAmount);
 
     final response = AdyenResponse.fromMap(result);
 
@@ -217,19 +226,38 @@ class _MyAppState extends State<MyApp> {
                   onPressed: () => _abortRequest(),
                   child: const Text("Abort Request")),
               const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: SizedBox(
-                  width: 400, // Set your desired width
-                  height: 50, // Optional: Set height if needed
-                  child: TextField(
-                    controller: _refundIdController,
-                    decoration: const InputDecoration(
-                      labelText: "Refund ID",
-                      border: OutlineInputBorder(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SizedBox(
+                      width: 400, // Set your desired width
+                      height: 50, // Optional: Set height if needed
+                      child: TextField(
+                        controller: _refundIdController,
+                        decoration: const InputDecoration(
+                          labelText: "Refund ID",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SizedBox(
+                      width: 200, // Set your desired width
+                      height: 50, // Optional: Set height if needed
+                      child: TextField(
+                        controller: _refundAmountController,
+                        decoration: const InputDecoration(
+                          labelText: "Refund Amount",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               ElevatedButton(
                   onPressed: () => _refundRequest(),

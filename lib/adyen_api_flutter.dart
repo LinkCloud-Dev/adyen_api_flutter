@@ -7,7 +7,7 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.getPlatformVersion();
   }
 
-  Future<void> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) {
+  Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) {
     return AdyenApiFlutterPlatform.instance.init(ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
@@ -19,8 +19,8 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance.abortRequest(POIID, saleID);
   }
 
-  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, {String saleID = "001"}) {
-    return AdyenApiFlutterPlatform.instance.refundRequest(transactionID, POIID, saleID);
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, {String saleID = "001", double? refundAmount}) {
+    return AdyenApiFlutterPlatform.instance.refundRequest(transactionID, POIID, saleID, refundAmount);
   }
 
   Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, MessageCategoryType statusRequestType, String POIID, {String saleID = "001"}) {

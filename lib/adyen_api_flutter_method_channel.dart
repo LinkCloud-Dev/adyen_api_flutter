@@ -17,8 +17,8 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<void> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) async {
-    await methodChannel.invokeMethod('init',
+  Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) async {
+    return await methodChannel.invokeMethod('init',
         {
           'ipAddress': ipAddress,
           'keyVersion': keyVersion,
@@ -52,12 +52,13 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, String saleID) async {
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, String saleID, double? refundAmount) async {
     final response = await methodChannel.invokeMethod('refundRequest',
         {
           'transactionID': transactionID,
           'POIID': POIID,
           'saleID': saleID,
+          'refundAmount': refundAmount,
         }
     );
     return response;

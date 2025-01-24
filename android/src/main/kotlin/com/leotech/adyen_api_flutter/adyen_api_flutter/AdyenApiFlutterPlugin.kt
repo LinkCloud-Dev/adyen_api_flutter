@@ -228,6 +228,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val messageHeader = saleToPOIResponse.getMessageHeader()
         val paymentResponse = saleToPOIResponse.getPaymentResponse()
+        val paymentReceiptList = parsePaymentReceipts(paymentResponse.getPaymentReceipt())
         val POIData = paymentResponse.getPOIData()
         val transactionIdentification = POIData.getPOITransactionID()
 
@@ -242,6 +243,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           ),
           "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
           "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
+          "paymentReceipt" to paymentReceiptList
         )
 
         printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
@@ -260,6 +262,35 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       }
     }
     Log.d(tag, "---> exit paymentRequest()")
+  }
+
+  private fun parsePaymentReceipts(paymentReceipts: List<PaymentReceipt>) : List<Map<String, Any?>> {
+    return paymentReceipts.map { receipt ->
+      val outputContent = receipt.getOutputContent()
+      val outputTexts = outputContent.getOutputText()
+
+      val outputTextList = outputTexts.map { outputText ->
+        mutableMapOf<String, Any?>(
+          "text" to outputText.getText(),
+          "endOfLineFlag" to outputText.isEndOfLineFlag()
+        ).apply {
+          // Safely handle CharacterStyleType
+          val characterStyle = outputText.getCharacterStyle()
+          if (characterStyle != null) {
+            this["characterStyle"] = characterStyle.value() // Convert to String using `value()`
+          }
+        }
+      }
+
+      mapOf(
+        "requiredSignatureFlag" to receipt.isRequiredSignatureFlag(),
+        "documentQualifier" to receipt.getDocumentQualifier().value(),
+        "outputContent" to mapOf(
+          "outputFormat" to outputContent.getOutputFormat().value(),
+          "outputText" to outputTextList
+        )
+      )
+    }
   }
 
    // referenced refunds (* connected to original payment)

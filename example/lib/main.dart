@@ -87,7 +87,8 @@ class _MyAppState extends State<MyApp> {
     print(">> response from map: ${response.result.toString()}, ${response.serviceID}, "
         "${response.adyenTransaction?.transactionID}, ${response.adyenTransaction?.timeStamp},"
         "${response.errorCondition}");
-
+    print(">> response parsed receipt: ${response.paymentReceipts![0].parseReceipt()}");
+    print(">> response parsed receipt: ${response.paymentReceipts![1].parseReceipt()}");
     print(">> response string: ${result.toString()}");
     // use with saleID
     // var result = await _adyenApiFlutterPlugin.paymentRequest(toDoubleAmountTrimmed(amount), POIID, saleID: saleID);

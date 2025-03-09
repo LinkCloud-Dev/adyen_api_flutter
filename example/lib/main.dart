@@ -40,6 +40,8 @@ class _MyAppState extends State<MyApp> {
 
   MessageCategoryType statusRequestType = MessageCategoryType.PAYMENT;
 
+  bool useCustomPaymentAmount = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,7 +79,19 @@ class _MyAppState extends State<MyApp> {
         ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
+  final TextEditingController _paymentAmountController = TextEditingController();
+  void _customPaymentAmount() {
+    if (!useCustomPaymentAmount) return;
+    var customPaymentAmountString = _paymentAmountController.text.trim();
+    double? customPaymentAmount = customPaymentAmountString == ""
+        ? null : double.parse(customPaymentAmountString);
+    if (customPaymentAmount != null) {
+      paymentAmount = customPaymentAmount;
+    }
+  }
+
   Future<void> _paymentRequest() async {
+    _customPaymentAmount();
     // use without saleID (default to "001")
     final Map result = await _adyenApiFlutterPlugin.paymentRequest(
         paymentAmount, POIID);
@@ -185,6 +199,7 @@ class _MyAppState extends State<MyApp> {
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
+                        useCustomPaymentAmount = false;
                         paymentAmount = 1.00;
                       });
                     },
@@ -194,6 +209,7 @@ class _MyAppState extends State<MyApp> {
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
+                        useCustomPaymentAmount = false;
                         paymentAmount = 2.99;
                       });
                     },
@@ -203,21 +219,26 @@ class _MyAppState extends State<MyApp> {
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
-                        paymentAmount = 5.45;
+                        useCustomPaymentAmount = true;
                       });
                     },
-                    child: const Text("\$5.45"),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        paymentAmount = 11.85;
-                      });
-                    },
-                    child: const Text("\$11.85"),
+                    child: const Text("Custom Amount"),
                   ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: SizedBox(
+                  width: 200, // Set your desired width
+                  height: 50, // Optional: Set height if needed
+                  child: TextField(
+                    controller: _paymentAmountController,
+                    decoration: const InputDecoration(
+                      labelText: "Payment Amount",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
               ),
               ElevatedButton(
                   onPressed: () => _paymentRequest(),

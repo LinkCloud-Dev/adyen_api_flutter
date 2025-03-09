@@ -41,6 +41,9 @@ import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
 import org.apache.commons.codec.binary.Base64;
 import org.json.JSONObject
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import java.io.File
 
 
 /** AdyenApiFlutterPlugin */
@@ -222,9 +225,11 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private fun paymentRequest(amount: Double, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> paymentRequest()")
     val request: TerminalAPIRequest? = createPaymentRequest(amount, POIID, saleID)
+    saveJsonToInternalStorage(context,"request.json", request)
     requestExecutor.submit {
       try {
         val response: TerminalAPIResponse = terminalLocalAPI.request(request)
+        saveJsonToInternalStorage(context, "response.json", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val messageHeader = saleToPOIResponse.getMessageHeader()
         val paymentResponse = saleToPOIResponse.getPaymentResponse()
@@ -297,9 +302,11 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, result: Result) {
     Log.d(tag, "---> refundRequest()")
     val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID, refundAmount)
+    saveJsonToInternalStorage(context,"request.json", request)
     requestExecutor.submit {
       try {
         val response: TerminalAPIResponse = terminalLocalAPI.request(request)
+        saveJsonToInternalStorage(context, "response.json", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val reversalResponse = saleToPOIResponse.getReversalResponse()
         val POIData = reversalResponse.getPOIData()
@@ -337,9 +344,11 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private fun statusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> statusRequest()")
     val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, statusRequestType, POIID, saleID)
+    saveJsonToInternalStorage(context,"request.json", request)
     abortAndStatusExecutor.submit {
       try {
         val response: TerminalAPIResponse = terminalLocalAPI.request(request)
+        saveJsonToInternalStorage(context, "response.json", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val transactionStatusResponse = saleToPOIResponse.getTransactionStatusResponse()
         val messageReference = transactionStatusResponse.getMessageReference()
@@ -416,6 +425,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     val request: TerminalAPIRequest? = createAbortRequest(currentServiceID!!, POIID, saleID)
+    saveJsonToInternalStorage(context,"request.json", request)
     abortAndStatusExecutor.submit {
       try {
         // abort request response is null
@@ -435,6 +445,21 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       }
     }
     Log.d(tag, "---> exit abortRequest()")
+  }
+
+  private fun createSaleToAcquirerData(): SaleToAcquirerData {
+    val saleToAcquirerData = SaleToAcquirerData()
+    saleToAcquirerData.setCurrency("AUD")
+    val applicationInfo = ApplicationInfo()
+    val externalPlatform = ExternalPlatform()
+    externalPlatform.setIntegrator("LinkGroup")
+    applicationInfo.setExternalPlatform(externalPlatform)
+    val merchantApplication = CommonField()
+    merchantApplication.setName("LinkPOS")
+    merchantApplication.setVersion("3.0.0")
+    applicationInfo.setMerchantApplication(merchantApplication)
+
+    return saleToAcquirerData
   }
 
   private fun createPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
@@ -459,15 +484,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
     val paymentRequest = PaymentRequest()
     val saleData = SaleData()
-    val saleToAcquirerData = SaleToAcquirerData()
-    val applicationInfo = ApplicationInfo()
-    val externalPlatform = ExternalPlatform()
-    externalPlatform.setIntegrator("LinkGroup")
-    applicationInfo.setExternalPlatform(externalPlatform)
-    val merchantApplication = CommonField()
-    merchantApplication.setName("LinkPOS")
-    merchantApplication.setVersion("3.0.0")
-    applicationInfo.setMerchantApplication(merchantApplication)
+    val saleToAcquirerData = createSaleToAcquirerData()
     saleData.setSaleToAcquirerData(saleToAcquirerData)
     val saleTransactionID = TransactionIdentification()
     saleTransactionID.setTransactionID(transactionID)
@@ -528,8 +545,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       reversalRequest.setReversedAmount(BigDecimal.valueOf(refundAmount))
 
       val saleData = SaleData()
-      val saleToAcquirerData = SaleToAcquirerData()
-      saleToAcquirerData.setCurrency("AUD")
+      val saleToAcquirerData = createSaleToAcquirerData()
       saleData.setSaleToAcquirerData(saleToAcquirerData)
       val saleTransactionID = TransactionIdentification()
       saleTransactionID.setTimeStamp(
@@ -1002,6 +1018,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     // Your unique ID for this request, consisting of 1-10 alphanumeric characters.
     // Must be unique within the last 48 hours for the terminal (POIID) being used.
     return System.currentTimeMillis().toString().takeLast(10) //"YOUR_UNIQUE_ATTEMPT_ID"
+  }
+
+  fun saveJsonToInternalStorage(context: Context, filename: String, data: Any?) {
+    val gson = GsonBuilder().setPrettyPrinting().create()
+    val jsonData = gson.toJson(data)
+
+    val file = File(context.filesDir, filename)
+    file.writeText(jsonData)
   }
 
 }

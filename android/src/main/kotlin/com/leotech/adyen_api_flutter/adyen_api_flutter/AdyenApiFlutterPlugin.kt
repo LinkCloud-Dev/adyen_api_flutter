@@ -130,6 +130,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           result
         )
       }
+      "printTextRequest" -> {
+        printTextRequest(
+          call.argument<List<Map<String, Any?>>>("lines")!!,
+          call.argument<String>("POIID")!!,
+          call.argument<String>("saleID")!!,
+          result
+        )
+      }
       else -> {
         result.notImplemented()
       }
@@ -447,6 +455,44 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit abortRequest()")
   }
 
+  private fun printTextRequest(lines: List<Map<String, Any?>>, POIID: String, saleID: String, result: Result) {
+    Log.d(tag, "---> printTextRequest()")
+    val request: TerminalAPIRequest? = createPrintTextRequest(lines, POIID, saleID)
+    saveJsonToInternalStorage(context,"request.json", request)
+    requestExecutor.submit {
+      try {
+        val response: TerminalAPIResponse = terminalLocalAPI.request(request)
+        saveJsonToInternalStorage(context, "response.json", response)
+        val saleToPOIResponse = response.getSaleToPOIResponse()
+        val printResponse = saleToPOIResponse.getPrintResponse()
+
+        val responseMap = mapOf(
+          "result" to printResponse.getResponse().getResult().value(),
+          "serviceID" to saleToPOIResponse.getMessageHeader().getServiceID(),
+          "POIID" to saleToPOIResponse.getMessageHeader().getPOIID(),
+          "saleID" to saleToPOIResponse.getMessageHeader().getSaleID(),
+          "errorCondition" to printResponse.getResponse().getErrorCondition()?.value(),
+          "additionalResponse" to String(Base64.decodeBase64(printResponse.getResponse().getAdditionalResponse())),
+        )
+
+        printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
+
+        Handler(Looper.getMainLooper()).post {
+          result.success(responseMap)
+        }
+      } catch (e: TimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("ERROR", e.message, null)
+        }
+      }
+    }
+    Log.d(tag, "---> exit printTextRequest()")
+  }
+
   private fun createSaleToAcquirerData(): SaleToAcquirerData {
     val saleToAcquirerData = SaleToAcquirerData()
     saleToAcquirerData.setCurrency("AUD")
@@ -627,6 +673,58 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     abortRequest.setMessageReference(messageReference)
 
     saleToPOIRequest.setAbortRequest(abortRequest)
+
+    val terminalAPIRequest = TerminalAPIRequest()
+    terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
+
+    return terminalAPIRequest
+  }
+
+  private fun createPrintTextRequest(lines: List<Map<String, Any?>>, POIID: String, saleID: String): TerminalAPIRequest? {
+
+    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+
+    val saleToPOIRequest = SaleToPOIRequest()
+    val messageHeader = MessageHeader()
+    messageHeader.setProtocolVersion("3.0")
+    messageHeader.setMessageClass(MessageClassType.SERVICE)
+    messageHeader.setMessageCategory(MessageCategoryType.PRINT)
+    messageHeader.setMessageType(MessageType.REQUEST)
+    messageHeader.setSaleID(saleID)
+    messageHeader.setServiceID(serviceID)
+    messageHeader.setPOIID(POIID)
+    saleToPOIRequest.setMessageHeader(messageHeader)
+
+
+    val printOutput = PrintOutput()
+    
+    // Set DocumentQualifier - defines the type of document to be printed
+    // Using "Document" for custom text printing
+    printOutput.setDocumentQualifier(DocumentQualifierType.DOCUMENT)
+    
+    // Set ResponseMode - specifies the type of message response expected
+    // Using "PrintEnd" to wait for print completion
+    printOutput.setResponseMode(ResponseModeType.PRINT_END)
+    
+    // Set IntegratedPrintFlag - whether the print is integrated with other prints
+    // Set to false for separated print (with paper cut if available)
+    printOutput.setIntegratedPrintFlag(false)
+    
+    // Set RequiredSignatureFlag - whether signature is required
+    // Set to false for simple text printing
+    printOutput.setRequiredSignatureFlag(false)
+
+    val outputContent = OutputContent()
+    outputContent.setOutputFormat(OutputFormatType.TEXT)
+
+    // Convert List<Map<String, Any?>> to List<OutputText>
+    val outputTextList = convertMapsToOutputTextList(lines)
+    outputContent.setOutputText(outputTextList)
+
+    printOutput.setOutputContent(outputContent)
+
+    val printRequest = PrintRequest()
+    printRequest.setPrintOutput(printOutput)
 
     val terminalAPIRequest = TerminalAPIRequest()
     terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
@@ -1026,6 +1124,101 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
     val file = File(context.filesDir, filename)
     file.writeText(jsonData)
+  }
+
+  /**
+   * Convert List<Map<String, Any?>> from Dart to List<OutputText> for Adyen Terminal API
+   * Maps Dart print text format to OutputText objects
+   */
+  private fun convertMapsToOutputTextList(lines: List<Map<String, Any?>>): List<OutputText> {
+    val outputTextList = mutableListOf<OutputText>()
+    
+    for (lineMap in lines) {
+      val outputText = OutputText()
+      
+      // Set text content
+      lineMap["text"]?.let { outputText.setText(it.toString()) }
+      
+      // Set alignment
+      lineMap["align"]?.let { align ->
+        when (align.toString()) {
+          "LEFT" -> outputText.setAlignment(AlignmentType.LEFT)
+          "RIGHT" -> outputText.setAlignment(AlignmentType.RIGHT)
+          "CENTRED" -> outputText.setAlignment(AlignmentType.CENTRED)
+          "JUSTIFIED" -> outputText.setAlignment(AlignmentType.JUSTIFIED)
+        }
+      }
+      
+      // Set character style
+      lineMap["style"]?.let { style ->
+        when (style.toString()) {
+          "NORMAL" -> outputText.setCharacterStyle(CharacterStyleType.NORMAL)
+          "BOLD" -> outputText.setCharacterStyle(CharacterStyleType.BOLD)
+          "UNDERLINED" -> outputText.setCharacterStyle(CharacterStyleType.UNDERLINED)
+          "ITALIC" -> outputText.setCharacterStyle(CharacterStyleType.ITALIC)
+        }
+      }
+      
+      // Set character width
+      lineMap["characterWidth"]?.let { width ->
+        when (width.toString()) {
+          "SINGLE_WIDTH" -> outputText.setCharacterWidth(CharacterWidthType.SINGLE_WIDTH)
+          "DOUBLE_WIDTH" -> outputText.setCharacterWidth(CharacterWidthType.DOUBLE_WIDTH)
+        }
+      }
+      
+      // Set character height
+      lineMap["characterHeight"]?.let { height ->
+        when (height.toString()) {
+          "SINGLE_HEIGHT" -> outputText.setCharacterHeight(CharacterHeightType.SINGLE_HEIGHT)
+          "HALF_HEIGHT" -> outputText.setCharacterHeight(CharacterHeightType.HALF_HEIGHT)
+          "DOUBLE_HEIGHT" -> outputText.setCharacterHeight(CharacterHeightType.DOUBLE_HEIGHT)
+        }
+      }
+      
+      // Set character set
+      lineMap["characterSet"]?.let { characterSet ->
+        outputText.setCharacterSet(characterSet as Int)
+      }
+      
+      // Set color
+      lineMap["color"]?.let { color ->
+        when (color.toString()) {
+          "WHITE" -> outputText.setColor(ColorType.WHITE)
+          "BLACK" -> outputText.setColor(ColorType.BLACK)
+          "RED" -> outputText.setColor(ColorType.RED)
+          "GREEN" -> outputText.setColor(ColorType.GREEN)
+          "BLUE" -> outputText.setColor(ColorType.BLUE)
+          "YELLOW" -> outputText.setColor(ColorType.YELLOW)
+          "CYAN" -> outputText.setColor(ColorType.CYAN)
+          "MAGENTA" -> outputText.setColor(ColorType.MAGENTA)
+        }
+      }
+      
+      // Set font
+      lineMap["font"]?.let { font ->
+        outputText.setFont(font.toString())
+      }
+      
+      // Set start column
+      lineMap["startColumn"]?.let { startColumn ->
+        outputText.setStartColumn(startColumn as Int)
+      }
+      
+      // Set start row
+      lineMap["startRow"]?.let { startRow ->
+        outputText.setStartRow(startRow as Int)
+      }
+      
+      // Set end of line flag
+      lineMap["endOfLine"]?.let { endOfLine ->
+        outputText.setEndOfLineFlag(endOfLine as Boolean)
+      }
+      
+      outputTextList.add(outputText)
+    }
+    
+    return outputTextList
   }
 
 }

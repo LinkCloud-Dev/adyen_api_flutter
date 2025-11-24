@@ -484,8 +484,8 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
     val paymentRequest = PaymentRequest()
     val saleData = SaleData()
-    val saleToAcquirerData = createSaleToAcquirerData()
-    saleData.setSaleToAcquirerData(saleToAcquirerData)
+//    val saleToAcquirerData = createSaleToAcquirerData()
+//    saleData.setSaleToAcquirerData(saleToAcquirerData)
     val saleTransactionID = TransactionIdentification()
     saleTransactionID.setTransactionID(transactionID)
     val timeStamp = DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
@@ -545,8 +545,8 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       reversalRequest.setReversedAmount(BigDecimal.valueOf(refundAmount))
 
       val saleData = SaleData()
-      val saleToAcquirerData = createSaleToAcquirerData()
-      saleData.setSaleToAcquirerData(saleToAcquirerData)
+//      val saleToAcquirerData = createSaleToAcquirerData()
+//      saleData.setSaleToAcquirerData(saleToAcquirerData)
       val saleTransactionID = TransactionIdentification()
       saleTransactionID.setTimeStamp(
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
@@ -774,7 +774,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       println("Sale to POI Data: ${saleData.saleToPOIData ?: "null"}")
 
       // Print Sale to Acquirer Data
-      println("Sale to Acquirer Data: ${saleData.saleToAcquirerData ?: "null"}")
+//      println("Sale to Acquirer Data: ${saleData.saleToAcquirerData ?: "null"}")
 
       // Print Sale to Issuer Data
       println("Sale to Issuer Data: ${saleData.saleToIssuerData ?: "null"}")

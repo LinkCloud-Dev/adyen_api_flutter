@@ -12,68 +12,73 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
 
   @override
   Future<String?> getPlatformVersion() async {
-    final version = await methodChannel.invokeMethod<String>('getPlatformVersion');
+    final version =
+        await methodChannel.invokeMethod<String>('getPlatformVersion');
     return version;
   }
 
   @override
-  Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier, String keyPassphrase, bool testEnvironment) async {
-    return await methodChannel.invokeMethod('init',
-        {
-          'ipAddress': ipAddress,
-          'keyVersion': keyVersion,
-          'keyIdentifier': keyIdentifier,
-          'keyPassphrase': keyPassphrase,
-          'testEnvironment': testEnvironment,
-        }
-    );
+  Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier,
+      String keyPassphrase, bool testEnvironment,
+      {bool encrypted = true}) async {
+    return await methodChannel.invokeMethod('init', {
+      'ipAddress': ipAddress,
+      'keyVersion': keyVersion,
+      'keyIdentifier': keyIdentifier,
+      'keyPassphrase': keyPassphrase,
+      'testEnvironment': testEnvironment,
+      'encrypted': encrypted,
+    });
   }
 
   @override
-  Future<Map<dynamic, dynamic>> paymentRequest(double amount, String POIID, String saleID) async {
-    final response = await methodChannel.invokeMethod('paymentRequest',
-        {
-          'amount': amount,
-          'POIID': POIID,
-          'saleID': saleID,
-        }
-    );
+  Future<void> dispose() async {
+    await methodChannel.invokeMethod('dispose');
+  }
+
+  @override
+  Future<Map<dynamic, dynamic>> paymentRequest(
+      double amount, String POIID, String saleID) async {
+    final response = await methodChannel.invokeMethod('paymentRequest', {
+      'amount': amount,
+      'POIID': POIID,
+      'saleID': saleID,
+    });
     return response;
   }
 
   @override
   Future<void> abortRequest(String POIID, String saleID) async {
-    await methodChannel.invokeMethod('abortRequest',
-        {
-          'POIID': POIID,
-          'saleID': saleID,
-        }
-    );
+    await methodChannel.invokeMethod('abortRequest', {
+      'POIID': POIID,
+      'saleID': saleID,
+    });
   }
 
   @override
-  Future<Map<dynamic, dynamic>> refundRequest(String transactionID, String POIID, String saleID, double? refundAmount) async {
-    final response = await methodChannel.invokeMethod('refundRequest',
-        {
-          'transactionID': transactionID,
-          'POIID': POIID,
-          'saleID': saleID,
-          'refundAmount': refundAmount,
-        }
-    );
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID,
+      String POIID, String saleID, double? refundAmount) async {
+    final response = await methodChannel.invokeMethod('refundRequest', {
+      'transactionID': transactionID,
+      'POIID': POIID,
+      'saleID': saleID,
+      'refundAmount': refundAmount,
+    });
     return response;
   }
 
   @override
-  Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID, MessageCategoryType statusRequestType, String POIID, String saleID) async {
-    final response = await methodChannel.invokeMethod('statusRequest',
-        {
-          'transactionServiceID': transactionServiceID,
-          'statusRequestType': statusRequestType.toString().split('.').last,
-          'POIID': POIID,
-          'saleID': saleID,
-        }
-    );
+  Future<Map<dynamic, dynamic>> statusRequest(
+      String transactionServiceID,
+      MessageCategoryType statusRequestType,
+      String POIID,
+      String saleID) async {
+    final response = await methodChannel.invokeMethod('statusRequest', {
+      'transactionServiceID': transactionServiceID,
+      'statusRequestType': statusRequestType.toString().split('.').last,
+      'POIID': POIID,
+      'saleID': saleID,
+    });
     return response;
   }
 }

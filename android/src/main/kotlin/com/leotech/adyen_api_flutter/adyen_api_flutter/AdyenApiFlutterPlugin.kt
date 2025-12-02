@@ -14,7 +14,7 @@ import com.adyen.model.applicationinfo.ApplicationInfo
 import com.adyen.model.applicationinfo.CommonField
 import com.adyen.model.applicationinfo.ExternalPlatform
 import com.adyen.model.nexo.*
-import com.adyen.model.terminal.SaleToAcquirerData
+// import com.adyen.model.terminal.SaleToAcquirerData
 import com.adyen.model.terminal.TerminalAPIRequest
 import com.adyen.model.terminal.TerminalAPIResponse
 import com.adyen.model.terminal.security.SecurityKey
@@ -57,13 +57,13 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   // test logging
   val tag = "LOG"
 
-  private lateinit var client: Client
-  private lateinit var service: Service
-  private lateinit var securityKey: SecurityKey
-  private lateinit var terminalLocalAPI: TerminalLocalAPI
-  private lateinit var terminalLocalAPIUnencrypted: TerminalLocalAPIUnencrypted
-  private lateinit var certificateInputStream: InputStream
-  private lateinit var sslContext: SSLContext
+  private var client: Client? = null
+  private var service: Service? = null
+  private var securityKey: SecurityKey? = null
+  private var terminalLocalAPI: TerminalLocalAPI? = null
+  private var terminalLocalAPIUnencrypted: TerminalLocalAPIUnencrypted? = null
+  private var certificateInputStream: InputStream? = null
+  private var sslContext: SSLContext? = null
   private lateinit var context: Context
   private var currentServiceID: String? = null
 
@@ -86,7 +86,11 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           call.argument<String>("keyIdentifier")!!,
           call.argument<String>("keyPassphrase")!!,
           call.argument<Boolean>("testEnvironment")!!,
+          call.argument<Boolean>("encrypted") ?: true,
           result)
+      }
+      "dispose" -> {
+        dispose(result)
       }
       "paymentRequest" -> {
         paymentRequest(
@@ -140,20 +144,27 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     channel.setMethodCallHandler(null)
   }
 
-  fun init(ipAddress: String, keyVersion: Int, keyIdentifier: String, keyPassphrase: String, testEnvironment: Boolean = false, result: Result) {
-    var initialized = true
+  fun dispose(result: Result) {
+    Log.d(tag, "---> dispose()")
+    client = null
+    terminalLocalAPI = null
+    terminalLocalAPIUnencrypted = null
+    securityKey = null
+    sslContext = null
+    currentServiceID = null
+    result.success(true)
+  }
+
+  fun init(ipAddress: String, keyVersion: Int, keyIdentifier: String, keyPassphrase: String, testEnvironment: Boolean = false, encrypted: Boolean = true, result: Result) {
     Log.d(tag, "---> init()")
 
-    try {
-      client
-    } catch (e: UninitializedPropertyAccessException) {
-      initialized = false
-    }
-
-    if (initialized) {
-//      result.error("INITIALIZED", "Initialized Already.", null)
-      result.success(false)
-      return
+    if (client != null) {
+        // If already initialized, dispose first to allow re-initialization (e.g. IP change)
+        Log.d(tag, "Already initialized, disposing first...")
+        client = null
+        terminalLocalAPI = null
+        securityKey = null
+        sslContext = null
     }
 
     try {
@@ -171,16 +182,20 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
       // set Client
       client = Client(config)
-      client.setEnvironment(environment, null)
+      client!!.setEnvironment(environment, null)
 
       // config SecurityKey
-      securityKey = SecurityKey()
-      securityKey.setKeyVersion(keyVersion)
-      securityKey.setAdyenCryptoVersion(1)
-      securityKey.setKeyIdentifier(keyIdentifier)
-      securityKey.setPassphrase(keyPassphrase)
+      if (encrypted) {
+        securityKey = SecurityKey()
+        securityKey!!.setKeyVersion(keyVersion)
+        securityKey!!.setAdyenCryptoVersion(1)
+        securityKey!!.setKeyIdentifier(keyIdentifier)
+        securityKey!!.setPassphrase(keyPassphrase)
 
-      terminalLocalAPI = TerminalLocalAPI(client, securityKey)
+        terminalLocalAPI = TerminalLocalAPI(client, securityKey)
+      } else {
+        terminalLocalAPIUnencrypted = TerminalLocalAPIUnencrypted(client)
+      }
       Log.d(tag, "---> exit init()")
 
       result.success(true)
@@ -199,9 +214,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
     keyStore.load(null, null)  // Initialize the KeyStore
     val certificateFactory = CertificateFactory.getInstance("X.509")
-    val adyenRootCertificate: X509Certificate = certificateFactory.generateCertificate(certificateInputStream) as X509Certificate
+    val adyenRootCertificate: X509Certificate = certificateFactory.generateCertificate(certificateInputStream!!) as X509Certificate
     keyStore.setCertificateEntry("adyenRootCertificate", adyenRootCertificate)
-    certificateInputStream.close()
+    certificateInputStream?.close()
     // init TrustManagerFactory using the KeyStore
     val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
     trustManagerFactory.init(keyStore)
@@ -225,11 +240,26 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private fun paymentRequest(amount: Double, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> paymentRequest()")
     val request: TerminalAPIRequest? = createPaymentRequest(amount, POIID, saleID)
-    saveJsonToInternalStorage(context,"request.json", request)
+    
+    // Log Merchant Reference (TransactionID)
+    val transactionID = request?.saleToPOIRequest?.paymentRequest?.saleData?.saleTransactionID?.transactionID
+    Log.d(tag, "Merchant Reference (TransactionID): $transactionID")
+
+    logAndStoreJson(context,"PaymentRequest", request)
     requestExecutor.submit {
       try {
-        val response: TerminalAPIResponse = terminalLocalAPI.request(request)
-        saveJsonToInternalStorage(context, "response.json", response)
+        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+          Handler(Looper.getMainLooper()).post {
+             result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
+          }
+          return@submit
+        }
+        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
+          terminalLocalAPI!!.request(request)
+        } else {
+          terminalLocalAPIUnencrypted!!.request(request)
+        }
+        logAndStoreJson(context, "PaymentResponse", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val messageHeader = saleToPOIResponse.getMessageHeader()
         val paymentResponse = saleToPOIResponse.getPaymentResponse()
@@ -302,11 +332,21 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, result: Result) {
     Log.d(tag, "---> refundRequest()")
     val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID, refundAmount)
-    saveJsonToInternalStorage(context,"request.json", request)
+    logAndStoreJson(context,"RefundRequest", request)
     requestExecutor.submit {
       try {
-        val response: TerminalAPIResponse = terminalLocalAPI.request(request)
-        saveJsonToInternalStorage(context, "response.json", response)
+        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+          Handler(Looper.getMainLooper()).post {
+             result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
+          }
+          return@submit
+        }
+        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
+          terminalLocalAPI!!.request(request)
+        } else {
+          terminalLocalAPIUnencrypted!!.request(request)
+        }
+        logAndStoreJson(context, "RefundResponse", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val reversalResponse = saleToPOIResponse.getReversalResponse()
         val POIData = reversalResponse.getPOIData()
@@ -344,11 +384,21 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private fun statusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> statusRequest()")
     val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, statusRequestType, POIID, saleID)
-    saveJsonToInternalStorage(context,"request.json", request)
+    logAndStoreJson(context,"StatusRequest", request)
     abortAndStatusExecutor.submit {
       try {
-        val response: TerminalAPIResponse = terminalLocalAPI.request(request)
-        saveJsonToInternalStorage(context, "response.json", response)
+        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+          Handler(Looper.getMainLooper()).post {
+             result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
+          }
+          return@submit
+        }
+        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
+          terminalLocalAPI!!.request(request)
+        } else {
+          terminalLocalAPIUnencrypted!!.request(request)
+        }
+        logAndStoreJson(context, "StatusResponse", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val transactionStatusResponse = saleToPOIResponse.getTransactionStatusResponse()
         val messageReference = transactionStatusResponse.getMessageReference()
@@ -425,12 +475,22 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     val request: TerminalAPIRequest? = createAbortRequest(currentServiceID!!, POIID, saleID)
-    saveJsonToInternalStorage(context,"request.json", request)
+    logAndStoreJson(context,"AbortRequest", request)
     abortAndStatusExecutor.submit {
       try {
+        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+          Handler(Looper.getMainLooper()).post {
+             result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
+          }
+          return@submit
+        }
         // abort request response is null
         // response returned to payment request object
-        terminalLocalAPI.request(request)
+        if (terminalLocalAPI != null) {
+          terminalLocalAPI!!.request(request)
+        } else {
+          terminalLocalAPIUnencrypted!!.request(request)
+        }
         Handler(Looper.getMainLooper()).post {
           result.success(null)
         }
@@ -447,20 +507,20 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit abortRequest()")
   }
 
-  private fun createSaleToAcquirerData(): SaleToAcquirerData {
-    val saleToAcquirerData = SaleToAcquirerData()
-    saleToAcquirerData.setCurrency("AUD")
-    val applicationInfo = ApplicationInfo()
-    val externalPlatform = ExternalPlatform()
-    externalPlatform.setIntegrator("LinkGroup")
-    applicationInfo.setExternalPlatform(externalPlatform)
-    val merchantApplication = CommonField()
-    merchantApplication.setName("LinkPOS")
-    merchantApplication.setVersion("3.0.0")
-    applicationInfo.setMerchantApplication(merchantApplication)
-
-    return saleToAcquirerData
-  }
+//  private fun createSaleToAcquirerData(): SaleToAcquirerData {
+//    val saleToAcquirerData = SaleToAcquirerData()
+//    saleToAcquirerData.setCurrency("AUD")
+//    val applicationInfo = ApplicationInfo()
+//    val externalPlatform = ExternalPlatform()
+//    externalPlatform.setIntegrator("LinkGroup")
+//    applicationInfo.setExternalPlatform(externalPlatform)
+//    val merchantApplication = CommonField()
+//    merchantApplication.setName("LinkPOS")
+//    merchantApplication.setVersion("3.0.0")
+//    applicationInfo.setMerchantApplication(merchantApplication)
+//
+//    return saleToAcquirerData
+//  }
 
   private fun createPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
 
@@ -1020,12 +1080,19 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return System.currentTimeMillis().toString().takeLast(10) //"YOUR_UNIQUE_ATTEMPT_ID"
   }
 
-  fun saveJsonToInternalStorage(context: Context, filename: String, data: Any?) {
+  fun logAndStoreJson(context: Context, type: String, data: Any?) {
     val gson = GsonBuilder().setPrettyPrinting().create()
     val jsonData = gson.toJson(data)
 
+    // Log to Logcat
+    Log.d(tag, "JSON ($type): $jsonData")
+
+    // Save to file with timestamp
+    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
+    val filename = "${type}_${timestamp}.json"
     val file = File(context.filesDir, filename)
     file.writeText(jsonData)
+    Log.d(tag, "Saved JSON to: ${file.absolutePath}")
   }
 
 }

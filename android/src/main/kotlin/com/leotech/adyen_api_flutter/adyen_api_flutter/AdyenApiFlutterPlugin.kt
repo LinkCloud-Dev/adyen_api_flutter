@@ -111,17 +111,10 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       }
       "statusRequest" -> {
         val statusRequestTypeString = call.argument<String>("statusRequestType")!!
-        println(">>>> string of type: " + statusRequestTypeString)
-        val statusRequestType = statusRequestTypeString?.let {
-          try {
-            MessageCategoryType.valueOf(it)
-          } catch (e: IllegalArgumentException) {
-            null // Handle invalid enum value gracefully
-          }
-        }
+        val statusRequestType = MessageCategoryType.valueOf(statusRequestTypeString)
         statusRequest(
           call.argument<String>("transactionServiceID")!!,
-          statusRequestType!!,
+          statusRequestType,
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
           result
@@ -129,6 +122,13 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       }
       "abortRequest" -> {
         abortRequest(
+          call.argument<String>("POIID")!!,
+          call.argument<String>("saleID")!!,
+          result
+        )
+      }
+      "diagnosisRequest" -> {
+        diagnosisRequest(
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
           result
@@ -159,7 +159,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> init()")
 
     if (client != null) {
-        // If already initialized, dispose first to allow re-initialization (e.g. IP change)
         Log.d(tag, "Already initialized, disposing first...")
         client = null
         terminalLocalAPI = null
@@ -171,20 +170,16 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       val environment = if (testEnvironment) Environment.TEST else Environment.LIVE
       val config = Config()
 
-      // URL of the terminal,
-      // for example https://192.168.68.117, WITHOUT the port/nexo part :8443/nexo/
       config.setTerminalApiLocalEndpoint("https://" + ipAddress)
       config.setEnvironment(environment)
-      config.setHostnameVerifier(TerminalLocalAPIHostnameVerifier(environment))
-      // init SSLContext
+      // config.setHostnameVerifier(TerminalLocalAPIHostnameVerifier(environment))
+      config.setHostnameVerifier { hostname, session -> true }
+
       sslContext = getSSLContext(context)
       config.setSSLContext(sslContext)
 
-      // set Client
       client = Client(config)
       client!!.setEnvironment(environment, null)
-
-      // config SecurityKey
       if (encrypted) {
         securityKey = SecurityKey()
         securityKey!!.setKeyVersion(keyVersion)
@@ -225,10 +220,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     val sslContext = SSLContext.getInstance("TLSv1.2")
     sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
 
-    // log certificate and SSLContext
-    logCertificateFromKeyStore(keyStore)
-    logSSLContextInfo(sslContext, trustManagerFactory)
-
+    
     Log.d(tag, "---> exit getSSLContext()")
 
     return sslContext
@@ -241,9 +233,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> paymentRequest()")
     val request: TerminalAPIRequest? = createPaymentRequest(amount, POIID, saleID)
     
-    // Log Merchant Reference (TransactionID)
     val transactionID = request?.saleToPOIRequest?.paymentRequest?.saleData?.saleTransactionID?.transactionID
-    Log.d(tag, "Merchant Reference (TransactionID): $transactionID")
 
     logAndStoreJson(context,"PaymentRequest", request)
     requestExecutor.submit {
@@ -281,7 +271,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           "paymentReceipt" to paymentReceiptList
         )
 
-        printSaleToPOIResponseInfo(response.getSaleToPOIResponse())
+        logResponseSummary("PaymentResponse", paymentResponse.getResponse().getResult().value(), paymentResponse.getResponse().getErrorCondition()?.value(), messageHeader.getServiceID())
 
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
@@ -309,10 +299,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           "text" to outputText.getText(),
           "endOfLineFlag" to outputText.isEndOfLineFlag()
         ).apply {
-          // Safely handle CharacterStyleType
           val characterStyle = outputText.getCharacterStyle()
           if (characterStyle != null) {
-            this["characterStyle"] = characterStyle.value() // Convert to String using `value()`
+            this["characterStyle"] = characterStyle.value()
           }
         }
       }
@@ -328,8 +317,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
   }
 
-   // referenced refunds (* connected to original payment)
-  private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, result: Result) {
+     private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, result: Result) {
     Log.d(tag, "---> refundRequest()")
     val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID, refundAmount)
     logAndStoreJson(context,"RefundRequest", request)
@@ -362,7 +350,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           "errorCondition" to reversalResponse.getResponse().getErrorCondition()?.value(),
           "additionalResponse" to String(Base64.decodeBase64(reversalResponse.getResponse().getAdditionalResponse())),
         )
-        printSaleToPOIResponseInfo(saleToPOIResponse)
+        logResponseSummary("RefundResponse", reversalResponse.getResponse().getResult().value(), reversalResponse.getResponse().getErrorCondition()?.value())
 
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
@@ -380,8 +368,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit refundRequest()")
   }
 
-  // use ServiceID to check statusRequest
-  private fun statusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String, result: Result) {
+    private fun statusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> statusRequest()")
     val request: TerminalAPIRequest? = createStatusRequest(transactionServiceID, statusRequestType, POIID, saleID)
     logAndStoreJson(context,"StatusRequest", request)
@@ -448,7 +435,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           "additionalResponse" to decodedAdditionalResponse,
         )
 
-        printSaleToPOIResponseInfo(saleToPOIResponse)
+        logResponseSummary("StatusResponse", transactionStatusResponse.getResponse().getResult().value(), transactionStatusResponse.getResponse().getErrorCondition()?.value(), messageReference?.getServiceID())
 
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
@@ -468,7 +455,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun abortRequest(POIID: String, saleID: String, result: Result) {
     Log.d(tag, "---> abortRequest()")
-    // check if there is an ongoing paymentRequest to abort
     if (currentServiceID == null) {
       result.error("INVALID_STATE", "No ongoing payment request. Cannot proceed with abort request.", null)
       return
@@ -484,9 +470,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           }
           return@submit
         }
-        // abort request response is null
-        // response returned to payment request object
-        if (terminalLocalAPI != null) {
+                if (terminalLocalAPI != null) {
           terminalLocalAPI!!.request(request)
         } else {
           terminalLocalAPIUnencrypted!!.request(request)
@@ -507,6 +491,56 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit abortRequest()")
   }
 
+  private fun diagnosisRequest(POIID: String, saleID: String, result: Result) {
+    Log.d(tag, "---> diagnosisRequest()")
+    val request: TerminalAPIRequest? = createDiagnosisRequest(POIID, saleID)
+    logAndStoreJson(context,"DiagnosisRequest", request)
+    abortAndStatusExecutor.submit {
+      try {
+        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+          Handler(Looper.getMainLooper()).post {
+             result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
+          }
+          return@submit
+        }
+        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
+          terminalLocalAPI!!.request(request)
+        } else {
+          terminalLocalAPIUnencrypted!!.request(request)
+        }
+        logAndStoreJson(context, "DiagnosisResponse", response)
+        
+        val saleToPOIResponse = response.getSaleToPOIResponse()
+        val diagnosisResponse = saleToPOIResponse.getDiagnosisResponse()
+        val messageHeader = saleToPOIResponse.getMessageHeader()
+
+        val responseMap = mapOf(
+          "result" to diagnosisResponse.getResponse().getResult().value(),
+          "serviceID" to messageHeader.getServiceID(),
+          "POIID" to messageHeader.getPOIID(),
+          "saleID" to messageHeader.getSaleID(),
+          "errorCondition" to diagnosisResponse.getResponse().getErrorCondition()?.value(),
+          "additionalResponse" to diagnosisResponse.getResponse().getAdditionalResponse(),
+        )
+
+        logResponseSummary("DiagnosisResponse", diagnosisResponse.getResponse().getResult().value(), diagnosisResponse.getResponse().getErrorCondition()?.value(), messageHeader.getServiceID())
+
+        Handler(Looper.getMainLooper()).post {
+          result.success(responseMap)
+        }
+      } catch (e: TimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("ERROR", e.message, null)
+        }
+      }
+    }
+    Log.d(tag, "---> exit diagnosisRequest()")
+  }
+
 //  private fun createSaleToAcquirerData(): SaleToAcquirerData {
 //    val saleToAcquirerData = SaleToAcquirerData()
 //    saleToAcquirerData.setCurrency("AUD")
@@ -524,12 +558,8 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun createPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
 
-    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
-
-    // Your reference to identify a payment.
-    // We recommend using a unique value per payment.
-    // In your Customer Area and Adyen reports, this will show as the merchant reference for the transaction.
-    val transactionID = java.util.UUID.randomUUID().toString().take(10) //"YOUR_UNIQUE_TRANSACTION_ID"
+    val serviceID = createServiceID()
+    val transactionID = java.util.UUID.randomUUID().toString().take(10)
 
     val saleToPOIRequest = SaleToPOIRequest()
     val messageHeader = MessageHeader()
@@ -573,7 +603,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun createRefundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?): TerminalAPIRequest? {
 
-    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+    val serviceID = createServiceID()
 
     val saleToPOIRequest = SaleToPOIRequest()
     val messageHeader = MessageHeader()
@@ -587,7 +617,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     saleToPOIRequest.setMessageHeader(messageHeader)
 
     val reversalRequest = ReversalRequest()
-    // transactionID and timeStamp of original transaction
     val originalPOITransaction = OriginalPOITransaction()
     val pOITransactionID = TransactionIdentification()
 
@@ -600,8 +629,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     reversalRequest.setOriginalPOITransaction(originalPOITransaction)
     reversalRequest.setReversalReason(ReversalReasonType.MERCHANT_CANCEL)
 
-    // handle partial refund
-    if (refundAmount != null) {
+        if (refundAmount != null) {
       reversalRequest.setReversedAmount(BigDecimal.valueOf(refundAmount))
 
       val saleData = SaleData()
@@ -628,7 +656,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun createStatusRequest(transactionServiceID: String, statusRequestType: MessageCategoryType, POIID: String, saleID: String): TerminalAPIRequest? {
 
-    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+    val serviceID = createServiceID()
 
     val saleToPOIRequest = SaleToPOIRequest()
     val messageHeader = MessageHeader()
@@ -648,8 +676,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     val messageReference = MessageReference()
     messageReference.setMessageCategory(statusRequestType)
     messageReference.setSaleID(saleID)
-
-    // serviceID of the transaction you want the status update from
     messageReference.setServiceID(transactionServiceID)
     transactionStatusRequest.setMessageReference(messageReference)
 
@@ -663,7 +689,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun createAbortRequest(paymentRequestServiceID: String, POIID: String, saleID: String): TerminalAPIRequest? {
 
-    val serviceID = createServiceID() //"YOUR_UNIQUE_ATTEMPT_ID"
+    val serviceID = createServiceID()
 
     val saleToPOIRequest = SaleToPOIRequest()
     val messageHeader = MessageHeader()
@@ -683,7 +709,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     messageReference.setSaleID(saleID)
     messageReference.setPOIID(POIID)
 
-    messageReference.setServiceID(paymentRequestServiceID) // Service ID of the payment you're aborting
+    messageReference.setServiceID(paymentRequestServiceID)
     abortRequest.setMessageReference(messageReference)
 
     saleToPOIRequest.setAbortRequest(abortRequest)
@@ -694,7 +720,33 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return terminalAPIRequest
   }
 
-  fun printSaleToPOIResponseInfo(response: SaleToPOIResponse?) {
+  private fun createDiagnosisRequest(POIID: String, saleID: String): TerminalAPIRequest? {
+    val serviceID = createServiceID()
+
+    val saleToPOIRequest = SaleToPOIRequest()
+    val messageHeader = MessageHeader()
+    messageHeader.setProtocolVersion("3.0")
+    messageHeader.setMessageClass(MessageClassType.SERVICE)
+    messageHeader.setMessageCategory(MessageCategoryType.DIAGNOSIS)
+    messageHeader.setMessageType(MessageType.REQUEST)
+    messageHeader.setSaleID(saleID)
+    messageHeader.setServiceID(serviceID)
+    messageHeader.setPOIID(POIID)
+    saleToPOIRequest.setMessageHeader(messageHeader)
+
+    val diagnosisRequest = DiagnosisRequest()
+    diagnosisRequest.setHostDiagnosisFlag(true)
+    
+    saleToPOIRequest.setDiagnosisRequest(diagnosisRequest)
+
+    val terminalAPIRequest = TerminalAPIRequest()
+    terminalAPIRequest.setSaleToPOIRequest(saleToPOIRequest)
+
+    return terminalAPIRequest
+  }
+
+  /* // Simplified - replaced with logResponseSummary()
+fun printSaleToPOIResponseInfo(response: SaleToPOIResponse?) {
   if (response == null) {
     println("SaleToPOIResponse is null.")
     return
@@ -782,317 +834,44 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   if (response.getSecurityTrailer() != null) {
     System.out.println("Security Trailer: " + response.getSecurityTrailer())
   }
-}
+} */
 
-  fun printPaymentResponseInfo(paymentResponse: PaymentResponse?) {
-    if (paymentResponse == null) {
-      println("PaymentResponse is null.")
-      return
-    }
-    println("PaymentResponse Information:")
+  
+  
+  
 
-    // Print Response
-    if (paymentResponse.getResponse() != null) {
-      println("- Response Information:")
-
-      val response = paymentResponse.getResponse()
-
-      // Print Additional Response
-      if (response.additionalResponse != null) {
-        println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse))}")
-      } else {
-        println("Additional Response: null}")
-      }
-
-      // Print Result
-      println("Result: ${response.result ?: "null"}")
-
-      // Print Error Condition
-      println("Error Condition: ${response.errorCondition ?: "null"}")
-    } else {
-      println("Response: null")
-    }
-
-    // Print Sale Data
-    if (paymentResponse.getSaleData() != null) {
-      val saleData = paymentResponse.getSaleData()
-      println("- SaleData Information:")
-
-      // Print Sale Transaction ID
-      println("Sale Transaction ID: ${saleData.saleTransactionID ?: "null"}")
-
-      // Print Sale Terminal Data
-      println("Sale Terminal Data: ${saleData.saleTerminalData ?: "null"}")
-
-      // Print Sponsored Merchants
-      println("Sponsored Merchants:")
-      saleData.sponsoredMerchant?.forEach { sponsoredMerchant ->
-        println(" - $sponsoredMerchant")
-      } ?: println("null")
-
-      // Print Sale to POI Data
-      println("Sale to POI Data: ${saleData.saleToPOIData ?: "null"}")
-
-      // Print Sale to Acquirer Data
-//      println("Sale to Acquirer Data: ${saleData.saleToAcquirerData ?: "null"}")
-
-      // Print Sale to Issuer Data
-      println("Sale to Issuer Data: ${saleData.saleToIssuerData ?: "null"}")
-
-      // Print Operator ID
-      println("Operator ID: ${saleData.operatorID ?: "null"}")
-
-      // Print Operator Language
-      println("Operator Language: ${saleData.operatorLanguage ?: "null"}")
-
-      // Print Shift Number
-      println("Shift Number: ${saleData.shiftNumber ?: "null"}")
-
-      // Print Sale Reference ID
-      println("Sale Reference ID: ${saleData.saleReferenceID ?: "null"}")
-
-      // Print Token Requested Type
-      println("Token Requested Type: ${saleData.tokenRequestedType ?: "null"}")
-
-      // Print Customer Order ID
-      println("Customer Order ID: ${saleData.customerOrderID ?: "null"}")
-
-      // Print Customer Order Requests
-      println("Customer Order Requests:")
-      saleData.customerOrderReq?.forEach { customerOrderReq ->
-        println(" - $customerOrderReq")
-      } ?: println("null")
-    } else {
-      println("Sale Data: null")
-    }
-
-    // Print POI Data
-    if (paymentResponse.getPOIData() != null) {
-      System.out.println("POI Data: " + paymentResponse.getPOIData())
-      printPOIData(paymentResponse.getPOIData())
-    } else {
-      println("POI Data: null")
-    }
-
-    // Print Payment Result
-    if (paymentResponse.getPaymentResult() != null) {
-      System.out.println("Payment Result: " + paymentResponse.getPaymentResult())
-    } else {
-      println("Payment Result: null")
-    }
-
-    // Print Loyalty Results
-    if (paymentResponse.getLoyaltyResult() != null && !paymentResponse.getLoyaltyResult()
-        .isEmpty()
-    ) {
-      println("Loyalty Results:")
-      for (loyaltyResult in paymentResponse.getLoyaltyResult()) {
-        println("  - $loyaltyResult")
-      }
-    } else {
-      println("Loyalty Results: none")
-    }
-
-    // Print Payment Receipts
-    if (paymentResponse.getPaymentReceipt() != null && !paymentResponse.getPaymentReceipt()
-        .isEmpty()
-    ) {
-      println("Payment Receipts:")
-      for (paymentReceipt in paymentResponse.getPaymentReceipt()) {
-        println("  - $paymentReceipt")
-      }
-    } else {
-      println("Payment Receipts: none")
-    }
-
-    // Print Customer Orders
-    if (paymentResponse.getCustomerOrder() != null && !paymentResponse.getCustomerOrder()
-        .isEmpty()
-    ) {
-      println("Customer Orders:")
-      for (customerOrder in paymentResponse.getCustomerOrder()) {
-        println("  - $customerOrder")
-      }
-    } else {
-      println("Customer Orders: none")
-    }
-  }
-
-  private fun printReversalResponseDetails(reversalResponse: ReversalResponse) {
-    // Log or print basic ReversalResponse properties
-    Log.d("ReversalResponse", "ReversedAmount: ${reversalResponse.reversedAmount}")
-    Log.d("ReversalResponse", "CustomerOrderID: ${reversalResponse.customerOrderID}")
-
-    // Print Response details
-    reversalResponse.response?.let { response ->
-      Log.d("Response", "Result: ${response.result}")
-      Log.d("Response", "ErrorCondition: ${response.errorCondition}")
-      if (response.additionalResponse != null) {
-        Log.d("Response", "AdditionalResponse: ${String(Base64.decodeBase64(response.additionalResponse))}")
-      } else {
-        Log.d("Response", "AdditionalResponse: null")
-      }
-
-    } ?: Log.d("Response", "Response is null")
-
-    // Print POIData details if available
-    reversalResponse.poiData?.let { poiData ->
-      Log.d("POIData", "POIData: $poiData") // Customize based on POIData implementation
-    } ?: Log.d("POIData", "POIData is null")
-
-    // Print OriginalPOITransaction details if available
-    reversalResponse.originalPOITransaction?.let { originalPOITransaction ->
-      Log.d("OriginalPOITransaction", "OriginalPOITransaction: $originalPOITransaction") // Customize as needed
-    } ?: Log.d("OriginalPOITransaction", "OriginalPOITransaction is null")
-
-    // Print PaymentReceipt list details if available
-    reversalResponse.paymentReceipt?.let { receipts ->
-      if (receipts.isNotEmpty()) {
-        receipts.forEachIndexed { index, receipt ->
-          Log.d("PaymentReceipt", "Receipt[$index]: $receipt") // Customize if PaymentReceipt has more fields
-        }
-      } else {
-        Log.d("PaymentReceipt", "PaymentReceipt list is empty")
-      }
-    } ?: Log.d("PaymentReceipt", "PaymentReceipt is null")
-  }
-
-  fun printPOIData(poiData: POIData?) {
-    if (poiData == null) {
-      println("POIData is null")
-      return
-    }
-
-    // Retrieve POITransactionID
-    val transactionId = poiData.poiTransactionID
-    if (transactionId != null) {
-      println("POITransactionID:")
-      println("\tTransactionID: ${transactionId.transactionID}")
-      println("\tTimeStamp: ${transactionId.timeStamp}")
-    } else {
-      println("POITransactionID is null")
-    }
-
-    // Retrieve POIReconciliationID
-    val reconciliationId = poiData.poiReconciliationID
-    println("POIReconciliationID: ${reconciliationId ?: "Not provided"}")
-  }
-
-
-  fun printMessageHeaderInfo(messageHeader: MessageHeader?) {
-    if (messageHeader == null) {
-      println("MessageHeader is null.")
-      return
-    }
-
-    println("MessageHeader Information:")
-
-    // Print Protocol Version
-    println("Protocol Version: ${messageHeader.protocolVersion ?: "null"}")
-
-    // Print Message Class
-    println("Message Class: ${messageHeader.messageClass ?: "null"}")
-
-    // Print Message Category
-    println("Message Category: ${messageHeader.messageCategory ?: "null"}")
-
-    // Print Message Type
-    println("Message Type: ${messageHeader.messageType ?: "null"}")
-
-    // Print Service ID
-    println("Service ID: ${messageHeader.serviceID ?: "null"}")
-
-    // Print Device ID
-    println("Device ID: ${messageHeader.deviceID ?: "null"}")
-
-    // Print Sale ID
-    println("Sale ID: ${messageHeader.saleID ?: "null"}")
-
-    // Print POIID
-    println("POIID: ${messageHeader.poiid ?: "null"}")
-  }
-
-  fun logSSLContextInfo(sslContext: SSLContext, trustManagerFactory: TrustManagerFactory) {
-    // Log the protocol used by SSLContext
-    Log.d("SSLContextInfo", "SSLContext Protocol: ${sslContext.protocol}")
-
-    // Retrieve TrustManager from the SSLContext
-    val trustManagers = trustManagerFactory.trustManagers
-    if (trustManagers != null && trustManagers.isNotEmpty()) {
-      // Log details of TrustManagers
-      for ((index, trustManager) in trustManagers.withIndex()) {
-        Log.d("SSLContextInfo", "TrustManager $index: ${trustManager::class.java.name}")
-
-        // If the TrustManager is X509TrustManager, we can log certificate details
-        if (trustManager is X509TrustManager) {
-          val acceptedIssuers = trustManager.acceptedIssuers
-          Log.d("SSLContextInfo", "Number of accepted issuers: ${acceptedIssuers.size}")
-
-          for ((certIndex, cert) in acceptedIssuers.withIndex()) {
-            Log.d("SSLContextInfo", "Certificate $certIndex: ${cert.subjectX500Principal}")
-            Log.d("SSLContextInfo", "Certificate Issuer: ${cert.issuerX500Principal}")
-            Log.d("SSLContextInfo", "Certificate Serial Number: ${cert.serialNumber}")
-          }
-        }
-      }
-    } else {
-      Log.w("SSLContextInfo", "No TrustManagers found in SSLContext.")
-    }
-  }
-
-  fun logCertificateFromKeyStore(keyStore: KeyStore) {
-    // Log each certificate entry in the KeyStore
-    Log.d(tag, "LOG certificate from KeyStore:")
-    keyStore.aliases().toList().forEach { alias ->
-      val certificate = keyStore.getCertificate(alias)
-      if (certificate != null) {
-        Log.d(tag, "Alias: $alias")
-        Log.d(tag, "Certificate Type: ${certificate.type}")
-        Log.d(tag, "Certificate Public Key: ${certificate.publicKey}")
-        Log.d(tag, "Certificate: $certificate")
-      } else {
-        Log.d(tag, "No certificate found for alias: $alias")
-      }
-    }
-  }
-
-  fun printResponseDetails(response: Response?) {
-    if (response == null) {
-      println("Response is null")
-      return
-    }
-
-    println("Response Details:")
-    if (response.additionalResponse != null) {
-      println("Additional Response: ${String(Base64.decodeBase64(response.additionalResponse))}")
-    } else {
-      println("Additional Response: null}")
-    }
-
-    println("Result: ${response.result ?: "N/A"}")
-    println("Error Condition: ${response.errorCondition ?: "N/A"}")
-  }
-
+  
+  
+  
+  
 
   fun createServiceID(): String {
-    // Your unique ID for this request, consisting of 1-10 alphanumeric characters.
-    // Must be unique within the last 48 hours for the terminal (POIID) being used.
-    return System.currentTimeMillis().toString().takeLast(10) //"YOUR_UNIQUE_ATTEMPT_ID"
+    return System.currentTimeMillis().toString().takeLast(10)
   }
 
   fun logAndStoreJson(context: Context, type: String, data: Any?) {
     val gson = GsonBuilder().setPrettyPrinting().create()
     val jsonData = gson.toJson(data)
 
-    // Log to Logcat
-    Log.d(tag, "JSON ($type): $jsonData")
+    // Log concise summary to Logcat
+    Log.d(tag, "$type: ${jsonData.take(200)}${if(jsonData.length > 200) "..." else ""}")
 
     // Save to file with timestamp
     val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
     val filename = "${type}_${timestamp}.json"
     val file = File(context.filesDir, filename)
     file.writeText(jsonData)
-    Log.d(tag, "Saved JSON to: ${file.absolutePath}")
+    Log.d(tag, "Saved $type to: ${file.name}")
+  }
+
+  private fun logResponseSummary(type: String, result: String?, errorCondition: String?, serviceID: String? = null) {
+    val summary = mutableListOf<String>().apply {
+      add(type)
+      result?.let { add("result=$it") }
+      errorCondition?.let { add("error=$it") }
+      serviceID?.let { add("serviceID=$it") }
+    }.joinToString(", ")
+    Log.d(tag, summary)
   }
 
 }

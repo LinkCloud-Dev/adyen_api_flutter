@@ -41,4 +41,9 @@ class AdyenApiFlutter {
     return AdyenApiFlutterPlatform.instance
         .statusRequest(transactionServiceID, statusRequestType, POIID, saleID);
   }
+
+  Future<Map<dynamic, dynamic>> diagnosisRequest(String POIID,
+      {String saleID = "001"}) {
+    return AdyenApiFlutterPlatform.instance.diagnosisRequest(POIID, saleID);
+  }
 }

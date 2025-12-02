@@ -59,4 +59,8 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     return _instance.statusRequest(
         transactionServiceID, statusRequestType, POIID, saleID);
   }
+
+  Future<Map<dynamic, dynamic>> diagnosisRequest(String POIID, String saleID) {
+    return _instance.diagnosisRequest(POIID, saleID);
+  }
 }

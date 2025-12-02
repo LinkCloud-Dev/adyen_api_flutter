@@ -81,4 +81,14 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
     });
     return response;
   }
+
+  @override
+  Future<Map<dynamic, dynamic>> diagnosisRequest(
+      String POIID, String saleID) async {
+    final response = await methodChannel.invokeMethod('diagnosisRequest', {
+      'POIID': POIID,
+      'saleID': saleID,
+    });
+    return response;
+  }
 }

@@ -14,7 +14,6 @@ import com.adyen.model.applicationinfo.ApplicationInfo
 import com.adyen.model.applicationinfo.CommonField
 import com.adyen.model.applicationinfo.ExternalPlatform
 import com.adyen.model.nexo.*
-// import com.adyen.model.terminal.SaleToAcquirerData
 import com.adyen.model.terminal.TerminalAPIRequest
 import com.adyen.model.terminal.TerminalAPIResponse
 import com.adyen.model.terminal.security.SecurityKey
@@ -61,7 +60,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
   private var service: Service? = null
   private var securityKey: SecurityKey? = null
   private var terminalLocalAPI: TerminalLocalAPI? = null
-  private var terminalLocalAPIUnencrypted: TerminalLocalAPIUnencrypted? = null
   private var certificateInputStream: InputStream? = null
   private var sslContext: SSLContext? = null
   private lateinit var context: Context
@@ -86,7 +84,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           call.argument<String>("keyIdentifier")!!,
           call.argument<String>("keyPassphrase")!!,
           call.argument<Boolean>("testEnvironment")!!,
-          call.argument<Boolean>("encrypted") ?: true,
           result)
       }
       "dispose" -> {
@@ -131,6 +128,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         diagnosisRequest(
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
+          call.argument<Boolean>("hostDiagnosisFlag") ?: false,
           result
         )
       }
@@ -148,14 +146,13 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> dispose()")
     client = null
     terminalLocalAPI = null
-    terminalLocalAPIUnencrypted = null
     securityKey = null
     sslContext = null
     currentServiceID = null
     result.success(true)
   }
 
-  fun init(ipAddress: String, keyVersion: Int, keyIdentifier: String, keyPassphrase: String, testEnvironment: Boolean = false, encrypted: Boolean = true, result: Result) {
+  fun init(ipAddress: String, keyVersion: Int, keyIdentifier: String, keyPassphrase: String, testEnvironment: Boolean = false, result: Result) {
     Log.d(tag, "---> init()")
 
     if (client != null) {
@@ -172,25 +169,25 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
       config.setTerminalApiLocalEndpoint("https://" + ipAddress)
       config.setEnvironment(environment)
-      // config.setHostnameVerifier(TerminalLocalAPIHostnameVerifier(environment))
-      config.setHostnameVerifier { hostname, session -> true }
+      config.setHostnameVerifier(TerminalLocalAPIHostnameVerifier(environment))
 
       sslContext = getSSLContext(context)
       config.setSSLContext(sslContext)
 
       client = Client(config)
       client!!.setEnvironment(environment, null)
-      if (encrypted) {
-        securityKey = SecurityKey()
-        securityKey!!.setKeyVersion(keyVersion)
-        securityKey!!.setAdyenCryptoVersion(1)
-        securityKey!!.setKeyIdentifier(keyIdentifier)
-        securityKey!!.setPassphrase(keyPassphrase)
 
-        terminalLocalAPI = TerminalLocalAPI(client, securityKey)
-      } else {
-        terminalLocalAPIUnencrypted = TerminalLocalAPIUnencrypted(client)
-      }
+      // Set timeout as recommended by Adyen (120s+)
+      config.setReadTimeoutMillis(130000)
+      config.setConnectionTimeoutMillis(130000)
+      
+      securityKey = SecurityKey()
+      securityKey!!.setKeyVersion(keyVersion)
+      securityKey!!.setAdyenCryptoVersion(1)
+      securityKey!!.setKeyIdentifier(keyIdentifier)
+      securityKey!!.setPassphrase(keyPassphrase)
+
+      terminalLocalAPI = TerminalLocalAPI(client, securityKey)
       Log.d(tag, "---> exit init()")
 
       result.success(true)
@@ -238,43 +235,60 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     logAndStoreJson(context,"PaymentRequest", request)
     requestExecutor.submit {
       try {
-        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+        if (terminalLocalAPI == null) {
           Handler(Looper.getMainLooper()).post {
              result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
           }
           return@submit
         }
-        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
-          terminalLocalAPI!!.request(request)
-        } else {
-          terminalLocalAPIUnencrypted!!.request(request)
-        }
+        val response: TerminalAPIResponse = terminalLocalAPI!!.request(request)
         logAndStoreJson(context, "PaymentResponse", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val messageHeader = saleToPOIResponse.getMessageHeader()
         val paymentResponse = saleToPOIResponse.getPaymentResponse()
-        val paymentReceiptList = parsePaymentReceipts(paymentResponse.getPaymentReceipt())
-        val POIData = paymentResponse.getPOIData()
-        val transactionIdentification = POIData.getPOITransactionID()
-
-        val responseMap = mapOf(
-          "result" to paymentResponse.getResponse().getResult().value(),
+        
+        val responseMap = mutableMapOf<String, Any?>(
           "serviceID" to messageHeader.getServiceID(),
           "POIID" to messageHeader.getPOIID(),
-          "saleID" to messageHeader.getSaleID(),
-          "transaction" to mapOf(
-            "transactionID" to transactionIdentification.getTransactionID(),
-            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
-          ),
-          "errorCondition" to paymentResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to String(Base64.decodeBase64(paymentResponse.getResponse().getAdditionalResponse())),
-          "paymentReceipt" to paymentReceiptList
+          "saleID" to messageHeader.getSaleID()
         )
 
-        logResponseSummary("PaymentResponse", paymentResponse.getResponse().getResult().value(), paymentResponse.getResponse().getErrorCondition()?.value(), messageHeader.getServiceID())
+        if (paymentResponse != null) {
+          responseMap["result"] = paymentResponse.getResponse().getResult().value()
+          responseMap["errorCondition"] = paymentResponse.getResponse().getErrorCondition()?.value()
+          
+          val additionalResponse = paymentResponse.getResponse().getAdditionalResponse()
+          if (additionalResponse != null) {
+            responseMap["additionalResponse"] = String(Base64.decodeBase64(additionalResponse))
+          }
+
+          val paymentReceiptList = parsePaymentReceipts(paymentResponse.getPaymentReceipt() ?: emptyList())
+          responseMap["paymentReceipt"] = paymentReceiptList
+
+          val poiData = paymentResponse.getPOIData()
+          if (poiData != null) {
+            val transactionIdentification = poiData.getPOITransactionID()
+            if (transactionIdentification != null) {
+              responseMap["transaction"] = mapOf(
+                "transactionID" to transactionIdentification.getTransactionID(),
+                "timeStamp" to transactionIdentification.getTimeStamp()?.toXMLFormat(),
+              )
+            }
+          }
+        }
+
+        logResponseSummary("PaymentResponse", responseMap["result"] as? String, responseMap["errorCondition"] as? String, messageHeader.getServiceID())
 
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
+        }
+      } catch (e: java.net.SocketTimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: java.io.IOException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("NETWORK_ERROR", "Network communication failed", null)
         }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {
@@ -323,37 +337,56 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     logAndStoreJson(context,"RefundRequest", request)
     requestExecutor.submit {
       try {
-        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+        if (terminalLocalAPI == null) {
           Handler(Looper.getMainLooper()).post {
              result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
           }
           return@submit
         }
-        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
-          terminalLocalAPI!!.request(request)
-        } else {
-          terminalLocalAPIUnencrypted!!.request(request)
-        }
+        val response: TerminalAPIResponse = terminalLocalAPI!!.request(request)
         logAndStoreJson(context, "RefundResponse", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val reversalResponse = saleToPOIResponse.getReversalResponse()
-        val POIData = reversalResponse.getPOIData()
-        val transactionIdentification = POIData.getPOITransactionID()
+        
+        val responseMap = mutableMapOf<String, Any?>()
+        
+        if (reversalResponse != null) {
+          responseMap["result"] = reversalResponse.getResponse().getResult().value()
+          responseMap["errorCondition"] = reversalResponse.getResponse().getErrorCondition()?.value()
+          responseMap["reversedAmount"] = reversalResponse.getReversedAmount()?.toPlainString()
+          
+          val additionalResponse = reversalResponse.getResponse().getAdditionalResponse()
+          if (additionalResponse != null) {
+            responseMap["additionalResponse"] = String(Base64.decodeBase64(additionalResponse))
+          }
 
-        val responseMap = mapOf(
-          "result" to reversalResponse.getResponse().getResult().value(),
-          "transaction" to mapOf(
-            "transactionID" to transactionIdentification.getTransactionID(),
-            "timeStamp" to transactionIdentification.getTimeStamp().toXMLFormat(),
-          ),
-          "reversedAmount" to reversalResponse.getReversedAmount()?.toPlainString(),
-          "errorCondition" to reversalResponse.getResponse().getErrorCondition()?.value(),
-          "additionalResponse" to String(Base64.decodeBase64(reversalResponse.getResponse().getAdditionalResponse())),
-        )
-        logResponseSummary("RefundResponse", reversalResponse.getResponse().getResult().value(), reversalResponse.getResponse().getErrorCondition()?.value())
+          val poiData = reversalResponse.getPOIData()
+          if (poiData != null) {
+            val transactionIdentification = poiData.getPOITransactionID()
+            if (transactionIdentification != null) {
+              responseMap["transaction"] = mapOf(
+                "transactionID" to transactionIdentification.getTransactionID(),
+                "timeStamp" to transactionIdentification.getTimeStamp()?.toXMLFormat(),
+              )
+            }
+          }
+        } else {
+            responseMap["result"] = "Failure"
+            responseMap["errorCondition"] = "EmptyResponse"
+        }
+
+        logResponseSummary("RefundResponse", responseMap["result"] as? String, responseMap["errorCondition"] as? String)
 
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
+        }
+      } catch (e: java.net.SocketTimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: java.io.IOException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("NETWORK_ERROR", "Network communication failed", null)
         }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {
@@ -374,17 +407,13 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     logAndStoreJson(context,"StatusRequest", request)
     abortAndStatusExecutor.submit {
       try {
-        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+        if (terminalLocalAPI == null) {
           Handler(Looper.getMainLooper()).post {
              result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
           }
           return@submit
         }
-        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
-          terminalLocalAPI!!.request(request)
-        } else {
-          terminalLocalAPIUnencrypted!!.request(request)
-        }
+        val response: TerminalAPIResponse = terminalLocalAPI!!.request(request)
         logAndStoreJson(context, "StatusResponse", response)
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val transactionStatusResponse = saleToPOIResponse.getTransactionStatusResponse()
@@ -440,6 +469,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
         }
+      } catch (e: java.net.SocketTimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: java.io.IOException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("NETWORK_ERROR", "Network communication failed", null)
+        }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {
           result.error("TIMED_OUT", "Request timed out", null)
@@ -464,19 +501,23 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     logAndStoreJson(context,"AbortRequest", request)
     abortAndStatusExecutor.submit {
       try {
-        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+        if (terminalLocalAPI == null) {
           Handler(Looper.getMainLooper()).post {
              result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
           }
           return@submit
         }
-                if (terminalLocalAPI != null) {
-          terminalLocalAPI!!.request(request)
-        } else {
-          terminalLocalAPIUnencrypted!!.request(request)
-        }
+        terminalLocalAPI!!.request(request)
         Handler(Looper.getMainLooper()).post {
           result.success(null)
+        }
+      } catch (e: java.net.SocketTimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: java.io.IOException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("NETWORK_ERROR", "Network communication failed", null)
         }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {
@@ -491,30 +532,26 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     Log.d(tag, "---> exit abortRequest()")
   }
 
-  private fun diagnosisRequest(POIID: String, saleID: String, result: Result) {
+  private fun diagnosisRequest(POIID: String, saleID: String, hostDiagnosisFlag: Boolean, result: Result) {
     Log.d(tag, "---> diagnosisRequest()")
-    val request: TerminalAPIRequest? = createDiagnosisRequest(POIID, saleID)
+    val request: TerminalAPIRequest? = createDiagnosisRequest(POIID, saleID, hostDiagnosisFlag)
     logAndStoreJson(context,"DiagnosisRequest", request)
     abortAndStatusExecutor.submit {
       try {
-        if (terminalLocalAPI == null && terminalLocalAPIUnencrypted == null) {
+        if (terminalLocalAPI == null) {
           Handler(Looper.getMainLooper()).post {
              result.error("NOT_INITIALIZED", "Adyen API not initialized", null)
           }
           return@submit
         }
-        val response: TerminalAPIResponse = if (terminalLocalAPI != null) {
-          terminalLocalAPI!!.request(request)
-        } else {
-          terminalLocalAPIUnencrypted!!.request(request)
-        }
+        val response: TerminalAPIResponse = terminalLocalAPI!!.request(request)
         logAndStoreJson(context, "DiagnosisResponse", response)
         
         val saleToPOIResponse = response.getSaleToPOIResponse()
         val diagnosisResponse = saleToPOIResponse.getDiagnosisResponse()
         val messageHeader = saleToPOIResponse.getMessageHeader()
 
-        val responseMap = mapOf(
+        val responseMap = mutableMapOf<String, Any?>(
           "result" to diagnosisResponse.getResponse().getResult().value(),
           "serviceID" to messageHeader.getServiceID(),
           "POIID" to messageHeader.getPOIID(),
@@ -523,10 +560,34 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           "additionalResponse" to diagnosisResponse.getResponse().getAdditionalResponse(),
         )
 
+        val poiStatus = diagnosisResponse.getPOIStatus()
+        if (poiStatus != null) {
+          responseMap["poiStatus"] = mapOf(
+            "GlobalStatus" to poiStatus.getGlobalStatus().value(),
+            "CommunicationOKFlag" to poiStatus.isCommunicationOKFlag(),
+            "PrinterStatus" to poiStatus.getPrinterStatus()?.value()
+          )
+        }
+
+        val hostStatus = diagnosisResponse.getHostStatus()
+        if (hostStatus != null && hostStatus.isNotEmpty()) {
+          responseMap["hostStatus"] = hostStatus.map {
+            mapOf("IsReachableFlag" to it.isIsReachableFlag())
+          }
+        }
+
         logResponseSummary("DiagnosisResponse", diagnosisResponse.getResponse().getResult().value(), diagnosisResponse.getResponse().getErrorCondition()?.value(), messageHeader.getServiceID())
 
         Handler(Looper.getMainLooper()).post {
           result.success(responseMap)
+        }
+      } catch (e: java.net.SocketTimeoutException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("TIMED_OUT", "Request timed out", null)
+        }
+      } catch (e: java.io.IOException) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("NETWORK_ERROR", "Network communication failed", null)
         }
       } catch (e: TimeoutException) {
         Handler(Looper.getMainLooper()).post {
@@ -540,21 +601,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
     Log.d(tag, "---> exit diagnosisRequest()")
   }
-
-//  private fun createSaleToAcquirerData(): SaleToAcquirerData {
-//    val saleToAcquirerData = SaleToAcquirerData()
-//    saleToAcquirerData.setCurrency("AUD")
-//    val applicationInfo = ApplicationInfo()
-//    val externalPlatform = ExternalPlatform()
-//    externalPlatform.setIntegrator("LinkGroup")
-//    applicationInfo.setExternalPlatform(externalPlatform)
-//    val merchantApplication = CommonField()
-//    merchantApplication.setName("LinkPOS")
-//    merchantApplication.setVersion("3.0.0")
-//    applicationInfo.setMerchantApplication(merchantApplication)
-//
-//    return saleToAcquirerData
-//  }
 
   private fun createPaymentRequest(amount: Double, POIID: String, saleID: String): TerminalAPIRequest? {
 
@@ -574,8 +620,6 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
 
     val paymentRequest = PaymentRequest()
     val saleData = SaleData()
-//    val saleToAcquirerData = createSaleToAcquirerData()
-//    saleData.setSaleToAcquirerData(saleToAcquirerData)
     val saleTransactionID = TransactionIdentification()
     saleTransactionID.setTransactionID(transactionID)
     val timeStamp = DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
@@ -629,12 +673,10 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     reversalRequest.setOriginalPOITransaction(originalPOITransaction)
     reversalRequest.setReversalReason(ReversalReasonType.MERCHANT_CANCEL)
 
-        if (refundAmount != null) {
+    if (refundAmount != null) {
       reversalRequest.setReversedAmount(BigDecimal.valueOf(refundAmount))
 
       val saleData = SaleData()
-//      val saleToAcquirerData = createSaleToAcquirerData()
-//      saleData.setSaleToAcquirerData(saleToAcquirerData)
       val saleTransactionID = TransactionIdentification()
       saleTransactionID.setTimeStamp(
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
@@ -720,7 +762,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return terminalAPIRequest
   }
 
-  private fun createDiagnosisRequest(POIID: String, saleID: String): TerminalAPIRequest? {
+  private fun createDiagnosisRequest(POIID: String, saleID: String, hostDiagnosisFlag: Boolean): TerminalAPIRequest? {
     val serviceID = createServiceID()
 
     val saleToPOIRequest = SaleToPOIRequest()
@@ -735,7 +777,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     saleToPOIRequest.setMessageHeader(messageHeader)
 
     val diagnosisRequest = DiagnosisRequest()
-    diagnosisRequest.setHostDiagnosisFlag(true)
+    diagnosisRequest.setHostDiagnosisFlag(hostDiagnosisFlag)
     
     saleToPOIRequest.setDiagnosisRequest(diagnosisRequest)
 

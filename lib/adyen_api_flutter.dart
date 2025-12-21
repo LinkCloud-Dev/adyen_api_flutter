@@ -7,11 +7,9 @@ class AdyenApiFlutter {
   }
 
   Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier,
-      String keyPassphrase, bool testEnvironment,
-      {bool encrypted = true}) {
+      String keyPassphrase, bool testEnvironment) {
     return AdyenApiFlutterPlatform.instance.init(
-        ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment,
-        encrypted: encrypted);
+        ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
   Future<void> dispose() {
@@ -43,7 +41,8 @@ class AdyenApiFlutter {
   }
 
   Future<Map<dynamic, dynamic>> diagnosisRequest(String POIID,
-      {String saleID = "001"}) {
-    return AdyenApiFlutterPlatform.instance.diagnosisRequest(POIID, saleID);
+      {String saleID = "001", bool hostDiagnosisFlag = false}) {
+    return AdyenApiFlutterPlatform.instance
+        .diagnosisRequest(POIID, saleID, hostDiagnosisFlag: hostDiagnosisFlag);
   }
 }

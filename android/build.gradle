@@ -48,7 +48,7 @@ android {
     dependencies {
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
-        implementation 'com.adyen:adyen-java-api-library:31.1.0'
+        implementation 'com.adyen:adyen-java-api-library:40.0.1'
         implementation 'com.google.code.gson:gson:2.10.1'
         implementation 'xerces:xercesImpl:2.8.0'
         implementation 'org.slf4j:slf4j-api:2.0.7'

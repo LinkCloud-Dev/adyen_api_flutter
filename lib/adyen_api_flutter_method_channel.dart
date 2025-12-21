@@ -19,15 +19,13 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
 
   @override
   Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier,
-      String keyPassphrase, bool testEnvironment,
-      {bool encrypted = true}) async {
+      String keyPassphrase, bool testEnvironment) async {
     return await methodChannel.invokeMethod('init', {
       'ipAddress': ipAddress,
       'keyVersion': keyVersion,
       'keyIdentifier': keyIdentifier,
       'keyPassphrase': keyPassphrase,
       'testEnvironment': testEnvironment,
-      'encrypted': encrypted,
     });
   }
 
@@ -83,11 +81,12 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<Map<dynamic, dynamic>> diagnosisRequest(
-      String POIID, String saleID) async {
+  Future<Map<dynamic, dynamic>> diagnosisRequest(String POIID, String saleID,
+      {bool hostDiagnosisFlag = false}) async {
     final response = await methodChannel.invokeMethod('diagnosisRequest', {
       'POIID': POIID,
       'saleID': saleID,
+      'hostDiagnosisFlag': hostDiagnosisFlag,
     });
     return response;
   }

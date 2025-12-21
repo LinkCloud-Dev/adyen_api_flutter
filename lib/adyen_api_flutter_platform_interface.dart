@@ -29,11 +29,9 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
   }
 
   Future<bool> init(String ipAddress, int keyVersion, String keyIdentifier,
-      String keyPassphrase, bool testEnvironment,
-      {bool encrypted = true}) {
+      String keyPassphrase, bool testEnvironment) {
     return _instance.init(
-        ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment,
-        encrypted: encrypted);
+        ipAddress, keyVersion, keyIdentifier, keyPassphrase, testEnvironment);
   }
 
   Future<void> dispose() {
@@ -60,7 +58,9 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
         transactionServiceID, statusRequestType, POIID, saleID);
   }
 
-  Future<Map<dynamic, dynamic>> diagnosisRequest(String POIID, String saleID) {
-    return _instance.diagnosisRequest(POIID, saleID);
+  Future<Map<dynamic, dynamic>> diagnosisRequest(String POIID, String saleID,
+      {bool hostDiagnosisFlag = false}) {
+    return _instance.diagnosisRequest(POIID, saleID,
+        hostDiagnosisFlag: hostDiagnosisFlag);
   }
 }

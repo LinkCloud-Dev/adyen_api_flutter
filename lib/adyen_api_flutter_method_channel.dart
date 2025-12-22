@@ -54,13 +54,18 @@ class MethodChannelAdyenApiFlutter extends AdyenApiFlutterPlatform {
   }
 
   @override
-  Future<Map<dynamic, dynamic>> refundRequest(String transactionID,
-      String POIID, String saleID, double? refundAmount) async {
+  Future<Map<dynamic, dynamic>> refundRequest(
+      String transactionID,
+      String POIID,
+      String saleID,
+      double? refundAmount,
+      String currencyCode) async {
     final response = await methodChannel.invokeMethod('refundRequest', {
       'transactionID': transactionID,
       'POIID': POIID,
       'saleID': saleID,
       'refundAmount': refundAmount,
+      'currencyCode': currencyCode,
     });
     return response;
   }

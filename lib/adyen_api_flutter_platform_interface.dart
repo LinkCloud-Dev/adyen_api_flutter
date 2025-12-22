@@ -47,9 +47,10 @@ abstract class AdyenApiFlutterPlatform extends PlatformInterface {
     return _instance.abortRequest(POIID, saleID);
   }
 
-  Future<Map<dynamic, dynamic>> refundRequest(
-      String transactionID, String POIID, String saleID, double? refundAmount) {
-    return _instance.refundRequest(transactionID, POIID, saleID, refundAmount);
+  Future<Map<dynamic, dynamic>> refundRequest(String transactionID,
+      String POIID, String saleID, double? refundAmount, String currencyCode) {
+    return _instance.refundRequest(
+        transactionID, POIID, saleID, refundAmount, currencyCode);
   }
 
   Future<Map<dynamic, dynamic>> statusRequest(String transactionServiceID,

@@ -14,6 +14,7 @@ import com.adyen.model.applicationinfo.ApplicationInfo
 import com.adyen.model.applicationinfo.CommonField
 import com.adyen.model.applicationinfo.ExternalPlatform
 import com.adyen.model.nexo.*
+import com.adyen.model.terminal.SaleToAcquirerData
 import com.adyen.model.terminal.TerminalAPIRequest
 import com.adyen.model.terminal.TerminalAPIResponse
 import com.adyen.model.terminal.security.SecurityKey
@@ -103,6 +104,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
           call.argument<String>("POIID")!!,
           call.argument<String>("saleID")!!,
           call.argument<Double>("refundAmount"),
+          call.argument<String>("currencyCode") ?: "AUD",
           result
         )
       }
@@ -331,9 +333,9 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     }
   }
 
-     private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, result: Result) {
+  private fun refundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, currencyCode: String, result: Result) {
     Log.d(tag, "---> refundRequest()")
-    val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID, refundAmount)
+    val request: TerminalAPIRequest? = createRefundRequest(transactionID, POIID, saleID, refundAmount, currencyCode)
     logAndStoreJson(context,"RefundRequest", request)
     requestExecutor.submit {
       try {
@@ -645,7 +647,7 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
     return terminalAPIRequest
   }
 
-  private fun createRefundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?): TerminalAPIRequest? {
+  private fun createRefundRequest(transactionID: String, POIID: String, saleID: String, refundAmount: Double?, currencyCode: String): TerminalAPIRequest? {
 
     val serviceID = createServiceID()
 
@@ -677,11 +679,14 @@ class AdyenApiFlutterPlugin: FlutterPlugin, MethodCallHandler {
       reversalRequest.setReversedAmount(BigDecimal.valueOf(refundAmount))
 
       val saleData = SaleData()
+      val saleToAcquirerData = SaleToAcquirerData()
+      saleToAcquirerData.setCurrency(currencyCode)
+      saleData.setSaleToAcquirerData(saleToAcquirerData)
       val saleTransactionID = TransactionIdentification()
       saleTransactionID.setTimeStamp(
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
       )
-      saleTransactionID.setTransactionID(transactionID)
+      saleTransactionID.setTransactionID(transactionID + "_refund")
       saleData.setSaleTransactionID(saleTransactionID)
       reversalRequest.setSaleData(saleData)
     }
